@@ -16,12 +16,14 @@ class MarstekUDPClient:
         self.local_port = local_port
         
     async def get_device_info(self, ble_mac: str):
-        """Send Marstek.GetDevice command once."""
-        # Normalize ble_mac to a string per API docs. Use '0' for discovery.
+        """Send Marstek.GetDevice command once.
+
+        Returns the full parsed RPC response (dict) so callers can access the
+        top-level "id" which is required for subsequent API calls.
+        """
+        # Normalize ble_mac to string per API docs. Use '0' for discovery.
         if ble_mac is None:
             ble_mac_param = "0"
-        elif isinstance(ble_mac, int):
-            ble_mac_param = str(ble_mac)
         else:
             ble_mac_param = str(ble_mac)
 
@@ -49,10 +51,12 @@ class MarstekUDPClient:
             response, addr = sock.recvfrom(4096)
             
             txt = response.decode('utf-8')
+            # Log the full response (including id) because the id is required
+            # for subsequent API calls.
             _LOGGER.info("RESPONSE: %s", txt)
             
             obj = json.loads(txt)
-            return obj.get("result", {}) if "result" in obj else None
+            return obj
             
         except Exception as e:
             _LOGGER.error("Error: %s", e)
