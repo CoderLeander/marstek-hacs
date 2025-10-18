@@ -1,0 +1,24 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Marstek Battery",
+        "description": "Set up your Marstek Battery integration",
+        "data": {
+          "device_ip": "Device IP Address",
+          "ble_mac": "BLE MAC Address", 
+          "remote_port": "Remote Port",
+          "local_port": "Local Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  }
+}
