@@ -17,8 +17,16 @@ class MarstekUDPClient:
         
     async def get_device_info(self, ble_mac: str):
         """Send Marstek.GetDevice command once."""
-        _LOGGER.info("Sending Marstek.GetDevice to %s:%s with BLE MAC: %s", 
-                     self.device_ip, self.remote_port, ble_mac)
+        # Normalize ble_mac to a string per API docs. Use '0' for discovery.
+        if ble_mac is None:
+            ble_mac_param = "0"
+        elif isinstance(ble_mac, int):
+            ble_mac_param = str(ble_mac)
+        else:
+            ble_mac_param = str(ble_mac)
+
+        _LOGGER.info("Sending Marstek.GetDevice to %s:%s with BLE MAC: %s",
+                     self.device_ip, self.remote_port, ble_mac_param)
         
         sock = None
         try:
@@ -31,7 +39,7 @@ class MarstekUDPClient:
             req = {
                 "id": rpc_id,
                 "method": "Marstek.GetDevice",
-                "params": {"ble_mac": ble_mac}
+                "params": {"ble_mac": ble_mac_param}
             }
             
             message = json.dumps(req).encode('utf-8')
