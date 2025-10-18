@@ -18,11 +18,28 @@ PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Marstek Battery from a config entry."""
+    _LOGGER.info("Setting up Marstek integration with entry data: %s", entry.data)
+    
+    # Check if we have all required configuration
+    required_keys = ["device_ip", "ble_mac"]
+    missing_keys = [key for key in required_keys if key not in entry.data]
+    if missing_keys:
+        _LOGGER.error("Missing required configuration keys: %s", missing_keys)
+        return False
+    
     device_ip = entry.data["device_ip"]
     ble_mac = entry.data["ble_mac"]
+    remote_port = entry.data.get("remote_port", 30000)
+    local_port = entry.data.get("local_port", 30000)
+    
+    _LOGGER.info("Setting up Marstek device at %s with BLE MAC %s", device_ip, ble_mac)
     
     # Create the UDP client
-    client = MarstekUDPClient(device_ip)
+    client = MarstekUDPClient(
+        device_ip=device_ip,
+        remote_port=remote_port,
+        local_port=local_port
+    )
     
     # Test connection
     if not await client.test_connection(ble_mac):

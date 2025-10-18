@@ -78,6 +78,7 @@ class MarstekUDPClient:
             
             # Send the UDP packet to the device
             _LOGGER.debug(f"Sending [{rpc_id}] {method} to {self.device_ip}:{self.remote_port}")
+            _LOGGER.debug(f"Request payload: {message.decode('utf-8')}")
             sock.sendto(message, (self.device_ip, self.remote_port))
             
             # Wait for response
@@ -89,11 +90,20 @@ class MarstekUDPClient:
             # Parse the JSON response back into a Python object
             obj = json.loads(txt)
             
-            _LOGGER.debug(f"Response [{rpc_id}] from {addr}: {txt}")
+            _LOGGER.info(f"Response [{rpc_id}] from {addr}: {txt}")
+            
+            # Check if there's an error in the response
+            if "error" in obj:
+                _LOGGER.error(f"Device returned error: {obj['error']}")
+                return None
+                
             return obj
             
         except socket.timeout:
             _LOGGER.warning(f"Timeout after {self.timeout} seconds for method {method}")
+            return None
+        except json.JSONDecodeError as e:
+            _LOGGER.error(f"Failed to parse JSON response: {e}")
             return None
         except Exception as e:
             _LOGGER.error(f"Error communicating with device: {e}")
@@ -111,7 +121,29 @@ class MarstekUDPClient:
         Returns:
             Device information or None if failed
         """
-        return await self.send_command("Marstek.GetDevice", {"ble_mac": ble_mac})
+        _LOGGER.info("Getting device info for BLE MAC: %s", ble_mac)
+        
+        # Try different possible methods
+        methods_to_try = [
+            ("Marstek.GetDevice", {"ble_mac": ble_mac}),
+            ("GetDevice", {"ble_mac": ble_mac}),
+            ("get_device_info", {"ble_mac": ble_mac}),
+            ("device_info", {"mac": ble_mac}),
+            ("status", {}),
+            ("get_status", {}),
+        ]
+        
+        for method, params in methods_to_try:
+            _LOGGER.info("Trying method: %s with params: %s", method, params)
+            result = await self.send_command(method, params)
+            if result is not None:
+                _LOGGER.info("Success with method %s: %s", method, result)
+                return result
+            else:
+                _LOGGER.warning("Method %s failed", method)
+        
+        _LOGGER.error("All methods failed for device info")
+        return None
     
     async def test_connection(self, ble_mac: str) -> bool:
         """Test if the device is reachable.
@@ -122,5 +154,23 @@ class MarstekUDPClient:
         Returns:
             True if device responds, False otherwise
         """
+        _LOGGER.info("Testing connection to device with BLE MAC: %s", ble_mac)
+        
+        # First try a simple ping-like command
+        simple_commands = [
+            ("ping", {}),
+            ("status", {}),
+            ("hello", {}),
+        ]
+        
+        for method, params in simple_commands:
+            result = await self.send_command(method, params)
+            if result is not None:
+                _LOGGER.info("Device responded to %s command", method)
+                return True
+        
+        # If simple commands fail, try the device info
         result = await self.get_device_info(ble_mac)
-        return result is not None
+        success = result is not None
+        _LOGGER.info("Connection test result: %s", success)
+        return success
