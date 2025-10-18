@@ -1,11 +1,11 @@
 {
   "domain": "marstek",
   "name": "Marstek Battery",
-  "version": "1.0.0",
-  "documentation": "https://github.com/yourusername/marstek-hacs",
-  "issue_tracker": "https://github.com/yourusername/marstek-hacs/issues",
+  "version": "1.0.1",
+  "documentation": "https://github.com/CoderLeander/marstek-hacs",
+  "issue_tracker": "https://github.com/CoderLeander/marstek-hacs/issues",
   "dependencies": [],
-  "codeowners": ["@yourusername"],
+  "codeowners": ["@CoderLeander"],
   "requirements": [],
   "config_flow": true,
   "iot_class": "local_polling"

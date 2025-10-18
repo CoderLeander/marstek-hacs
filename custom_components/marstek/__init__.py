@@ -29,11 +29,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("Failed to connect to Marstek device at %s", device_ip)
         return False
     
+    _LOGGER.info("Successfully connected to Marstek device at %s", device_ip)
+    
     # Create coordinator for data updates
     coordinator = MarstekDataUpdateCoordinator(hass, client, ble_mac)
     
     # Fetch initial data so we have data when entities subscribe
     await coordinator.async_config_entry_first_refresh()
+    
+    _LOGGER.info("Initial data fetch completed. Data: %s", coordinator.data)
     
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {
@@ -72,12 +76,15 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
         """Update data via library."""
         try:
             # Get device information
+            _LOGGER.info("Updating data for BLE MAC: %s", self.ble_mac)
             data = await self.client.get_device_info(self.ble_mac)
             if data is None:
+                _LOGGER.warning("No data received from device")
                 raise UpdateFailed("Failed to communicate with device")
             
-            _LOGGER.debug("Received data: %s", data)
+            _LOGGER.info("Received data: %s", data)
             return data
             
         except Exception as err:
+            _LOGGER.error("Error updating data: %s", err)
             raise UpdateFailed(f"Error communicating with API: {err}") from err

@@ -24,11 +24,13 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Marstek Battery sensor platform."""
+    _LOGGER.info("Setting up Marstek sensor platform")
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     
     # Create sensors based on available data
     entities = []
     for sensor_type, config in SENSOR_TYPES.items():
+        _LOGGER.info("Creating sensor: %s", sensor_type)
         entities.append(
             MarstekSensor(
                 coordinator,
@@ -38,6 +40,7 @@ async def async_setup_entry(
             )
         )
     
+    _LOGGER.info("Adding %d sensor entities", len(entities))
     async_add_entities(entities)
 
 class MarstekSensor(CoordinatorEntity, SensorEntity):
@@ -88,30 +91,34 @@ class MarstekSensor(CoordinatorEntity, SensorEntity):
     def native_value(self) -> Any:
         """Return the state of the sensor."""
         if not self.coordinator.data:
+            _LOGGER.debug("No coordinator data available for %s", self._sensor_type)
             return None
         
         # Extract the sensor value from the coordinator data
         # This will need to be adapted based on your actual API response structure
         data = self.coordinator.data
+        _LOGGER.debug("Processing sensor %s with data: %s", self._sensor_type, data)
         
         # Example mapping - you'll need to adjust based on your actual API response
+        value = None
         if self._sensor_type == "battery_voltage":
             # Look for voltage in the response data
-            return self._extract_value(data, ["voltage", "volt", "v"])
+            value = self._extract_value(data, ["voltage", "volt", "v"])
         elif self._sensor_type == "battery_current":
             # Look for current in the response data
-            return self._extract_value(data, ["current", "amp", "a"])
+            value = self._extract_value(data, ["current", "amp", "a"])
         elif self._sensor_type == "battery_power":
             # Look for power in the response data
-            return self._extract_value(data, ["power", "watt", "w"])
+            value = self._extract_value(data, ["power", "watt", "w"])
         elif self._sensor_type == "battery_temperature":
             # Look for temperature in the response data
-            return self._extract_value(data, ["temperature", "temp", "t"])
+            value = self._extract_value(data, ["temperature", "temp", "t"])
         elif self._sensor_type == "battery_soc":
             # Look for state of charge in the response data
-            return self._extract_value(data, ["soc", "state_of_charge", "battery_level", "charge"])
+            value = self._extract_value(data, ["soc", "state_of_charge", "battery_level", "charge"])
         
-        return None
+        _LOGGER.debug("Sensor %s extracted value: %s", self._sensor_type, value)
+        return value
     
     def _extract_value(self, data: dict, possible_keys: list[str]) -> Any:
         """Extract value from data using possible key names."""
