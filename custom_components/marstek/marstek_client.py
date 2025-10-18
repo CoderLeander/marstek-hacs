@@ -156,11 +156,19 @@ class MarstekUDPClient:
         """
         _LOGGER.info("Testing connection to device with BLE MAC: %s", ble_mac)
         
+        # First try a very simple UDP ping to see if the device is listening
+        result = await self.send_raw_udp_test()
+        if result:
+            _LOGGER.info("Raw UDP test successful")
+        else:
+            _LOGGER.warning("Raw UDP test failed")
+        
         # First try a simple ping-like command
         simple_commands = [
             ("ping", {}),
             ("status", {}),
             ("hello", {}),
+            ("info", {}),
         ]
         
         for method, params in simple_commands:
@@ -174,3 +182,39 @@ class MarstekUDPClient:
         success = result is not None
         _LOGGER.info("Connection test result: %s", success)
         return success
+    
+    async def send_raw_udp_test(self) -> bool:
+        """Send a raw UDP packet to test basic connectivity."""
+        return await asyncio.get_event_loop().run_in_executor(
+            None, self._send_raw_udp_test_sync
+        )
+    
+    def _send_raw_udp_test_sync(self) -> bool:
+        """Send a raw UDP packet synchronously."""
+        sock = None
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(('', self.local_port))
+            sock.settimeout(2)  # Shorter timeout for ping
+            
+            # Send a simple test message
+            test_message = b"PING"
+            _LOGGER.info(f"Sending raw UDP test to {self.device_ip}:{self.remote_port}")
+            sock.sendto(test_message, (self.device_ip, self.remote_port))
+            
+            # Try to receive any response
+            try:
+                response, addr = sock.recvfrom(1024)
+                _LOGGER.info(f"Raw UDP response from {addr}: {response}")
+                return True
+            except socket.timeout:
+                _LOGGER.info("No raw UDP response received")
+                return False
+                
+        except Exception as e:
+            _LOGGER.error(f"Raw UDP test error: {e}")
+            return False
+        finally:
+            if sock:
+                sock.close()

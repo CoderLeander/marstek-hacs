@@ -86,7 +86,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=timedelta(seconds=30),  # Update every 30 seconds
+            update_interval=timedelta(minutes=2),  # Update every 2 minutes to reduce stress on device
         )
     
     async def _async_update_data(self):
@@ -96,12 +96,30 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
             _LOGGER.info("Updating data for BLE MAC: %s", self.ble_mac)
             data = await self.client.get_device_info(self.ble_mac)
             if data is None:
-                _LOGGER.warning("No data received from device")
-                raise UpdateFailed("Failed to communicate with device")
+                _LOGGER.warning("No data received from device, providing fallback data")
+                # Return fallback/mock data so sensors still work
+                return {
+                    "status": "offline",
+                    "voltage": None,
+                    "current": None,
+                    "power": None,
+                    "temperature": None,
+                    "soc": None,
+                    "last_update": "device_offline"
+                }
             
             _LOGGER.info("Received data: %s", data)
             return data
             
         except Exception as err:
             _LOGGER.error("Error updating data: %s", err)
-            raise UpdateFailed(f"Error communicating with API: {err}") from err
+            # Instead of raising UpdateFailed, return offline status
+            return {
+                "status": "error",
+                "voltage": None,
+                "current": None, 
+                "power": None,
+                "temperature": None,
+                "soc": None,
+                "last_update": f"error: {err}"
+            }
