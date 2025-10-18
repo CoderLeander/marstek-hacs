@@ -24,13 +24,13 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Marstek Battery sensor platform."""
-    _LOGGER.info("Setting up Marstek sensor platform")
+    _LOGGER.info("🏗️ SENSOR SETUP: Initializing Marstek sensor platform")
     coordinator = hass.data[DOMAIN][config_entry.entry_id]["coordinator"]
     
     # Create sensors based on available data
     entities = []
     for sensor_type, config in SENSOR_TYPES.items():
-        _LOGGER.info("Creating sensor: %s", sensor_type)
+        _LOGGER.info("🔧 SENSOR SETUP: Creating sensor: %s (%s)", sensor_type, config['name'])
         entities.append(
             MarstekSensor(
                 coordinator,
@@ -40,7 +40,7 @@ async def async_setup_entry(
             )
         )
     
-    _LOGGER.info("Adding %d sensor entities", len(entities))
+    _LOGGER.info("✅ SENSOR SETUP: Adding %d sensor entities to Home Assistant", len(entities))
     async_add_entities(entities)
 
 class MarstekSensor(CoordinatorEntity, SensorEntity):

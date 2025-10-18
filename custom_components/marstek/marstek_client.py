@@ -77,8 +77,8 @@ class MarstekUDPClient:
             message = json.dumps(req, separators=(',', ':')).encode('utf-8')
             
             # Send the UDP packet to the device
-            _LOGGER.debug(f"Sending [{rpc_id}] {method} to {self.device_ip}:{self.remote_port}")
-            _LOGGER.debug(f"Request payload: {message.decode('utf-8')}")
+            _LOGGER.info(f"📤 SENDING [{rpc_id}] {method} to {self.device_ip}:{self.remote_port}")
+            _LOGGER.info(f"📤 REQUEST PAYLOAD: {message.decode('utf-8')}")
             sock.sendto(message, (self.device_ip, self.remote_port))
             
             # Wait for response
@@ -90,60 +90,127 @@ class MarstekUDPClient:
             # Parse the JSON response back into a Python object
             obj = json.loads(txt)
             
-            _LOGGER.info(f"Response [{rpc_id}] from {addr}: {txt}")
+            _LOGGER.info(f"📥 RESPONSE [{rpc_id}] from {addr}: {txt}")
             
             # Check if there's an error in the response
             if "error" in obj:
-                _LOGGER.error(f"Device returned error: {obj['error']}")
+                _LOGGER.error(f"❌ DEVICE ERROR [{rpc_id}]: {obj['error']}")
                 return None
-                
+            
+            _LOGGER.info(f"✅ SUCCESS [{rpc_id}]: Command {method} completed successfully")
             return obj
             
         except socket.timeout:
-            _LOGGER.warning(f"Timeout after {self.timeout} seconds for method {method}")
+            _LOGGER.warning(f"⏰ TIMEOUT [{method}]: No response after {self.timeout} seconds")
             return None
         except json.JSONDecodeError as e:
-            _LOGGER.error(f"Failed to parse JSON response: {e}")
+            _LOGGER.error(f"🔧 JSON DECODE ERROR [{method}]: Failed to parse response: {e}")
             return None
         except Exception as e:
-            _LOGGER.error(f"Error communicating with device: {e}")
+            _LOGGER.error(f"💥 COMMUNICATION ERROR [{method}]: {e}")
             return None
         finally:
             if sock:
                 sock.close()
     
     async def get_device_info(self, ble_mac: str) -> Optional[Dict[str, Any]]:
-        """Get device information.
+        """Get device information and all sensor data.
         
         Args:
             ble_mac: BLE MAC address of the device
             
         Returns:
-            Device information or None if failed
+            Combined device and sensor information or None if failed
         """
         _LOGGER.info("Getting device info for BLE MAC: %s", ble_mac)
         
-        # Try different possible methods
-        methods_to_try = [
-            ("Marstek.GetDevice", {"ble_mac": ble_mac}),
-            ("GetDevice", {"ble_mac": ble_mac}),
-            ("get_device_info", {"ble_mac": ble_mac}),
-            ("device_info", {"mac": ble_mac}),
-            ("status", {}),
-            ("get_status", {}),
-        ]
+        # Get basic device info first
+        device_result = await self.send_command("Marstek.GetDevice", {"ble_mac": ble_mac})
+        if device_result is None or "error" in device_result:
+            _LOGGER.error("Failed to get device info: %s", device_result)
+            return None
         
-        for method, params in methods_to_try:
-            _LOGGER.info("Trying method: %s with params: %s", method, params)
-            result = await self.send_command(method, params)
-            if result is not None:
-                _LOGGER.info("Success with method %s: %s", method, result)
-                return result
-            else:
-                _LOGGER.warning("Method %s failed", method)
+        device_info = device_result.get("result", {})
+        device_id = device_info.get("ble_mac", ble_mac)  # Use BLE MAC as device ID
         
-        _LOGGER.error("All methods failed for device info")
-        return None
+        _LOGGER.info("Device info retrieved: %s", device_info)
+        
+        # Get all sensor data
+        combined_data = {"device": device_info}
+        
+        # Get battery status
+        bat_result = await self.send_command("Bat.GetStatus", {"id": device_id})
+        if bat_result and "result" in bat_result:
+            combined_data["battery"] = bat_result["result"]
+            _LOGGER.info("Battery data: %s", bat_result["result"])
+        
+        # Get PV (solar) status
+        pv_result = await self.send_command("PV.GetStatus", {"id": device_id})
+        if pv_result and "result" in pv_result:
+            combined_data["pv"] = pv_result["result"]
+            _LOGGER.info("PV data: %s", pv_result["result"])
+        
+        # Get Energy Storage status
+        es_result = await self.send_command("ES.GetStatus", {"id": device_id})
+        if es_result and "result" in es_result:
+            combined_data["energy_storage"] = es_result["result"]
+            _LOGGER.info("ES data: %s", es_result["result"])
+        
+        # Get Energy Management status
+        em_result = await self.send_command("EM.GetStatus", {"id": device_id})
+        if em_result and "result" in em_result:
+            combined_data["energy_management"] = em_result["result"]
+            _LOGGER.info("EM data: %s", em_result["result"])
+        
+        # Get WiFi status
+        wifi_result = await self.send_command("Wifi.GetStatus", {"id": device_id})
+        if wifi_result and "result" in wifi_result:
+            combined_data["wifi"] = wifi_result["result"]
+            _LOGGER.info("WiFi data: %s", wifi_result["result"])
+        
+        # Get BLE status
+        ble_result = await self.send_command("BLE.GetStatus", {"id": device_id})
+        if ble_result and "result" in ble_result:
+            combined_data["ble"] = ble_result["result"]
+            _LOGGER.info("BLE data: %s", ble_result["result"])
+        
+        _LOGGER.info("Combined data collected: %s", combined_data)
+        return combined_data
+    
+    async def get_battery_status(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """Get battery status."""
+        result = await self.send_command("Bat.GetStatus", {"id": device_id})
+        return result.get("result") if result and "result" in result else None
+    
+    async def get_pv_status(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """Get PV (solar) status."""
+        result = await self.send_command("PV.GetStatus", {"id": device_id})
+        return result.get("result") if result and "result" in result else None
+    
+    async def get_energy_storage_status(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """Get Energy Storage status."""
+        result = await self.send_command("ES.GetStatus", {"id": device_id})
+        return result.get("result") if result and "result" in result else None
+    
+    async def get_energy_management_status(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """Get Energy Management status."""
+        result = await self.send_command("EM.GetStatus", {"id": device_id})
+        return result.get("result") if result and "result" in result else None
+    
+    async def get_wifi_status(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """Get WiFi status."""
+        result = await self.send_command("Wifi.GetStatus", {"id": device_id})
+        return result.get("result") if result and "result" in result else None
+    
+    async def get_ble_status(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """Get BLE status."""
+        result = await self.send_command("BLE.GetStatus", {"id": device_id})
+        return result.get("result") if result and "result" in result else None
+    
+    async def get_energy_storage_mode(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """Get Energy Storage mode."""
+        result = await self.send_command("ES.GetMode", {"id": device_id})
+        return result.get("result") if result and "result" in result else None
     
     async def test_connection(self, ble_mac: str) -> bool:
         """Test if the device is reachable.
@@ -154,16 +221,18 @@ class MarstekUDPClient:
         Returns:
             True if device responds, False otherwise
         """
-        _LOGGER.info("Testing connection to device with BLE MAC: %s", ble_mac)
+        _LOGGER.info("🔍 CONNECTION TEST: Starting test for device with BLE MAC: %s", ble_mac)
         
         # First try a very simple UDP ping to see if the device is listening
+        _LOGGER.info("🔍 CONNECTION TEST: Step 1 - Raw UDP connectivity test")
         result = await self.send_raw_udp_test()
         if result:
-            _LOGGER.info("Raw UDP test successful")
+            _LOGGER.info("✅ CONNECTION TEST: Raw UDP test successful - device is listening!")
         else:
-            _LOGGER.warning("Raw UDP test failed")
+            _LOGGER.warning("⚠️ CONNECTION TEST: Raw UDP test failed - device may not be listening")
         
         # First try a simple ping-like command
+        _LOGGER.info("🔍 CONNECTION TEST: Step 2 - Trying simple command tests")
         simple_commands = [
             ("ping", {}),
             ("status", {}),
@@ -172,15 +241,30 @@ class MarstekUDPClient:
         ]
         
         for method, params in simple_commands:
+            _LOGGER.info("🔍 CONNECTION TEST: Trying command: %s", method)
             result = await self.send_command(method, params)
             if result is not None:
-                _LOGGER.info("Device responded to %s command", method)
+                _LOGGER.info("✅ CONNECTION TEST: Device responded to %s command!", method)
                 return True
+            _LOGGER.info("❌ CONNECTION TEST: No response to %s command", method)
         
         # If simple commands fail, try the device info
+        _LOGGER.info("🔍 CONNECTION TEST: Step 3 - Trying device info retrieval")
         result = await self.get_device_info(ble_mac)
         success = result is not None
-        _LOGGER.info("Connection test result: %s", success)
+        
+        if success:
+            _LOGGER.info("✅ CONNECTION TEST: Successfully retrieved device info!")
+        else:
+            _LOGGER.error("❌ CONNECTION TEST: Failed to retrieve device info")
+            _LOGGER.error("❌ CONNECTION TEST: Check the following:")
+            _LOGGER.error("   - Device IP address (%s) is correct", self.device_ip)
+            _LOGGER.error("   - Device is powered on and connected to network")
+            _LOGGER.error("   - BLE MAC address (%s) is correct", ble_mac)
+            _LOGGER.error("   - Remote port (%s) matches device configuration", self.remote_port)
+            _LOGGER.error("   - Local port (%s) is not blocked by firewall", self.local_port)
+        
+        _LOGGER.info("🔍 CONNECTION TEST: Final result: %s", "SUCCESS" if success else "FAILED")
         return success
     
     async def send_raw_udp_test(self) -> bool:
@@ -200,20 +284,20 @@ class MarstekUDPClient:
             
             # Send a simple test message
             test_message = b"PING"
-            _LOGGER.info(f"Sending raw UDP test to {self.device_ip}:{self.remote_port}")
+            _LOGGER.info(f"📤 RAW UDP TEST: Sending to {self.device_ip}:{self.remote_port}")
             sock.sendto(test_message, (self.device_ip, self.remote_port))
             
             # Try to receive any response
             try:
                 response, addr = sock.recvfrom(1024)
-                _LOGGER.info(f"Raw UDP response from {addr}: {response}")
+                _LOGGER.info(f"📥 RAW UDP TEST: Response from {addr}: {response}")
                 return True
             except socket.timeout:
-                _LOGGER.info("No raw UDP response received")
+                _LOGGER.info("⏰ RAW UDP TEST: No response received (timeout)")
                 return False
                 
         except Exception as e:
-            _LOGGER.error(f"Raw UDP test error: {e}")
+            _LOGGER.error(f"💥 RAW UDP TEST ERROR: {e}")
             return False
         finally:
             if sock:
