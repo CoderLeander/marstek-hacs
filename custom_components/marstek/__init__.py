@@ -2,6 +2,7 @@
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN
 from .marstek_client import MarstekUDPClient
 
@@ -64,6 +65,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if not devices:
         _LOGGER.warning("No devices discovered during setup")
+
+    # Register device in Home Assistant's device registry
+    device_registry = dr.async_get(hass)
+    
+    # Use the data from config entry if available, otherwise fall back to discovered data
+    device_name = entry.data.get("device_name") or "Marstek Device"
+    device_version = entry.data.get("device_version")
+    wifi_mac = entry.data.get("wifi_mac")
+    ble_mac = entry.data.get("ble_mac")
+    wifi_name = entry.data.get("wifi_name")
+    
+    # Create a more descriptive device name
+    if wifi_name:
+        device_title = f"{device_name} ({wifi_name})"
+    else:
+        device_title = device_name
+    
+    # Register the device
+    device_registry.async_get_or_create(
+        config_entry_id=entry.entry_id,
+        identifiers={(DOMAIN, ble_mac or wifi_mac or device_ip)},
+        manufacturer="Marstek",
+        model=device_name,
+        name=device_title,
+        sw_version=str(device_version) if device_version else None,
+        connections=set(),
+    )
 
     hass.data[DOMAIN][entry.entry_id] = {"client": client, "rpc_id": rpc_id, "devices": devices}
 
