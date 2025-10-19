@@ -87,3 +87,65 @@ class MarstekUDPClient:
     async def test_connection(self, ble_mac: str) -> bool:
         result = await self.get_device_info(ble_mac)
         return result is not None
+    
+    async def get_battery_status(self, device_id: int):
+        """Send ES.GetStatus command to retrieve battery information.
+        
+        Args:
+            device_id: The device ID returned from the GetDevice call.
+            
+        Returns:
+            Full parsed RPC response (dict) containing battery status information.
+        """
+        # Rate limiting: ensure minimum interval between requests
+        current_time = time.time()
+        time_since_last_request = current_time - self._last_request_time
+        
+        if time_since_last_request < self._min_request_interval:
+            sleep_time = self._min_request_interval - time_since_last_request
+            _LOGGER.debug("Rate limiting: waiting %.2f seconds before next request", sleep_time)
+            await asyncio.sleep(sleep_time)
+        
+        self._last_request_time = time.time()
+        
+        _LOGGER.info("Sending ES.GetStatus to %s:%s with device ID: %s", self.device_ip, self.remote_port, device_id)
+        
+        sock = None
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(('', self.local_port))
+            sock.settimeout(10)  # 10 second timeout
+            
+            rpc_id = random.randint(1000, 65000)
+            req = {
+                "id": rpc_id,
+                "method": "ES.GetStatus",
+                "params": {"id": device_id}
+            }
+            
+            message = json.dumps(req).encode('utf-8')
+            _LOGGER.info("REQUEST: %s", message.decode('utf-8'))
+            
+            sock.sendto(message, (self.device_ip, self.remote_port))
+            response, addr = sock.recvfrom(4096)
+            
+            txt = response.decode('utf-8')
+            _LOGGER.info("RESPONSE: %s", txt)
+            
+            obj = json.loads(txt)
+            
+            # Log the response ID specifically for tracking
+            if "id" in obj:
+                _LOGGER.info("Response ID: %s", obj["id"])
+            else:
+                _LOGGER.warning("No 'id' field found in response")
+            
+            return obj
+            
+        except Exception as e:
+            _LOGGER.error("Error getting battery status: %s", e)
+            return None
+        finally:
+            if sock:
+                sock.close()

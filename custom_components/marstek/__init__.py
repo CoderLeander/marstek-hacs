@@ -16,22 +16,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     remote_port = entry.data.get("remote_port", 30000)
     local_port = entry.data.get("local_port", 30000)
 
-    # Create client and request discovery (ble_mac="0")
+    # Create client (no need to call API again, we have data from config_flow)
     client = MarstekUDPClient(device_ip, remote_port, local_port)
-    rpc_response = await client.get_device_info("0")
-
-    if rpc_response is None:
-        _LOGGER.error("Failed to get device info during setup")
+    
+    # Use device information already gathered during config_flow
+    rpc_id = entry.data.get("device_id")
+    if rpc_id is None:
+        _LOGGER.error("No device ID found in entry data - config flow may have failed")
         return False
 
-    # Expect the client to return the full RPC object: {"id":..., "src":..., "result": ...}
-    if not isinstance(rpc_response, dict):
-        _LOGGER.error("Unexpected RPC response type: %s", type(rpc_response))
-        return False
-
-    rpc_id = rpc_response.get("id")
-    src = rpc_response.get("src")
-    payload = rpc_response.get("result")
+    # Build device info from stored config entry data
+    payload = {
+        "device": entry.data.get("device_name"),
+        "ver": entry.data.get("device_version"),
+        "ble_mac": entry.data.get("ble_mac"),
+        "wifi_mac": entry.data.get("wifi_mac"),
+        "wifi_name": entry.data.get("wifi_name"),
+        "ip": entry.data.get("device_reported_ip"),
+    }
+    
+    # Remove None values
+    payload = {k: v for k, v in payload.items() if v is not None}
+    
+    src = f"{payload.get('device', 'Unknown')} {payload.get('ver', '')}-{payload.get('ble_mac', 'unknown')}"
 
     if payload is None:
         _LOGGER.error("RPC response missing 'result' payload")
