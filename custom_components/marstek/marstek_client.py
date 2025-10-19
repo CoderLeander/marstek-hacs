@@ -18,15 +18,7 @@ class MarstekUDPClient:
         self._last_request_time = 0
         self._min_request_interval = 1.0  # Minimum 1 second between requests
         
-    async def get_device_info(self, ble_mac: str):
-        """Send Marstek.GetDevice command once with rate limiting.
-
-        Returns the full parsed RPC response (dict) so callers can access the
-        top-level "id" which is required for subsequent API calls.
-        
-        Args:
-            ble_mac: BLE MAC address as string. Use "0" for discovery of all devices.
-        """
+    async def _send_rpc_request(self, method: str, params: dict):
         # Rate limiting: ensure minimum interval between requests
         current_time = time.time()
         time_since_last_request = current_time - self._last_request_time
@@ -38,90 +30,34 @@ class MarstekUDPClient:
         
         self._last_request_time = time.time()
         
-        _LOGGER.info("Sending Marstek.GetDevice to %s:%s with BLE MAC: %s", self.device_ip, self.remote_port, ble_mac)
+        _LOGGER.info("Sending %s to %s:%s with params: %s", method, self.device_ip, self.remote_port, params)
         
         sock = None
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.bind(('', self.local_port))
-            sock.settimeout(10)  # Extended timeout from 5 to 10 seconds
             
-            rpc_id = random.randint(1000, 65000)
-            # Ensure ble_mac is always a string
-            ble_mac_str = str(ble_mac)
-            req = {
-                "id": rpc_id,
-                "method": "Marstek.GetDevice",
-                "params": {"ble_mac": ble_mac_str}
-            }
+            # Try to bind to the local port, with fallback if occupied
+            max_retries = 5
+            for attempt in range(max_retries):
+                try:
+                    port_to_try = self.local_port + attempt
+                    sock.bind(('', port_to_try))
+                    if attempt > 0:
+                        _LOGGER.debug("Bound to port %d (original %d was busy)", port_to_try, self.local_port)
+                    break
+                except OSError as e:
+                    if attempt == max_retries - 1:
+                        raise e
+                    _LOGGER.debug("Port %d busy, trying %d", port_to_try, port_to_try + 1)
             
-            message = json.dumps(req).encode('utf-8')
-            _LOGGER.info("REQUEST: %s", message.decode('utf-8'))
-            
-            sock.sendto(message, (self.device_ip, self.remote_port))
-            response, addr = sock.recvfrom(4096)
-            
-            txt = response.decode('utf-8')
-            # Log the full response (including id) because the id is required
-            # for subsequent API calls.
-            _LOGGER.info("RESPONSE: %s", txt)
-            
-            obj = json.loads(txt)
-            
-            # Log the response ID specifically for tracking
-            if "id" in obj:
-                _LOGGER.info("Response ID: %s", obj["id"])
-            else:
-                _LOGGER.warning("No 'id' field found in response")
-            
-            return obj
-            
-        except Exception as e:
-            _LOGGER.error("Error: %s", e)
-            return None
-        finally:
-            if sock:
-                sock.close()
-    
-    async def test_connection(self, ble_mac: str) -> bool:
-        result = await self.get_device_info(ble_mac)
-        return result is not None
-    
-    async def get_battery_status(self, device_id: int):
-        """Send Bat.GetStatus command to retrieve battery information.
-        
-        Args:
-            device_id: The device ID returned from the GetDevice call.
-            
-        Returns:
-            Full parsed RPC response (dict) containing battery status information.
-        """
-        # Rate limiting: ensure minimum interval between requests
-        current_time = time.time()
-        time_since_last_request = current_time - self._last_request_time
-        
-        if time_since_last_request < self._min_request_interval:
-            sleep_time = self._min_request_interval - time_since_last_request
-            _LOGGER.debug("Rate limiting: waiting %.2f seconds before next request", sleep_time)
-            await asyncio.sleep(sleep_time)
-        
-        self._last_request_time = time.time()
-        
-        _LOGGER.info("Sending Bat.GetStatus to %s:%s with device ID: %s", self.device_ip, self.remote_port, device_id)
-        
-        sock = None
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            sock.bind(('', self.local_port))
             sock.settimeout(10)  # 10 second timeout
             
             rpc_id = random.randint(1000, 65000)
             req = {
                 "id": rpc_id,
-                "method": "Bat.GetStatus",
-                "params": {"id": device_id}
+                "method": method,
+                "params": params
             }
             
             message = json.dumps(req).encode('utf-8')
@@ -133,19 +69,21 @@ class MarstekUDPClient:
             txt = response.decode('utf-8')
             _LOGGER.info("RESPONSE: %s", txt)
             
-            obj = json.loads(txt)
-            
-            # Log the response ID specifically for tracking
-            if "id" in obj:
-                _LOGGER.info("Response ID: %s", obj["id"])
-            else:
-                _LOGGER.warning("No 'id' field found in response")
-            
+            obj = json.loads(txt)            
             return obj
             
         except Exception as e:
-            _LOGGER.error("Error getting battery status: %s", e)
+            _LOGGER.error("Error sending %s request: %s", method, e)
             return None
         finally:
             if sock:
                 sock.close()
+        
+    async def get_device_info(self, ble_mac: str):
+        ble_mac_str = str(ble_mac)        
+        params = {"ble_mac": ble_mac_str}
+        return await self._send_rpc_request("Marstek.GetDevice", params)
+    
+    async def get_battery_status(self, device_id: int):
+        params = {"id": device_id}
+        return await self._send_rpc_request("Bat.GetStatus", params)

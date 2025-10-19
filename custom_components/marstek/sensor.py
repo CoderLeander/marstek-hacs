@@ -129,8 +129,13 @@ async def async_setup_entry(
     # Create data coordinator for battery status updates
     coordinator = MarstekDataUpdateCoordinator(hass, client, device_id)
     
-    # Perform initial data fetch
-    await coordinator.async_config_entry_first_refresh()
+    # Perform initial data fetch (but don't fail if it doesn't work immediately)
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except Exception as exc:
+        _LOGGER.warning("Initial battery data fetch failed, will retry later: %s", exc)
+        # Don't fail setup, just continue without initial data
+        # The coordinator will keep trying on the regular update interval
     
     # Create sensors for battery status (dynamic data)
     for description in BATTERY_STATUS_SENSORS:
@@ -197,7 +202,9 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
         try:
             battery_data = await self.client.get_battery_status(self.device_id)
             if battery_data is None:
-                raise UpdateFailed("Failed to fetch battery status")
+                _LOGGER.warning("Failed to fetch battery status - device may be busy or unreachable")
+                # Return previous data if available, or empty dict for first attempt
+                return getattr(self, 'data', {})
             
             # Extract the result section which contains the actual battery data
             result = battery_data.get("result", {})
@@ -206,7 +213,9 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
             return result
             
         except Exception as exception:
-            raise UpdateFailed(f"Error communicating with API: {exception}")
+            _LOGGER.warning("Error communicating with battery API: %s", exception)
+            # Return previous data if available, or empty dict for first attempt  
+            return getattr(self, 'data', {})
 
 
 class MarstekBatteryStatusSensor(SensorEntity):
