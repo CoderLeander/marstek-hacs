@@ -3,17 +3,40 @@ import socket
 import json
 import random
 import logging
+import asyncio
+import time
 
 _LOGGER = logging.getLogger(__name__)
 
 class MarstekUDPClient:
+    """Simple UDP client for Marstek.GetDevice command only."""
     
     def __init__(self, device_ip: str, remote_port: int = 30000, local_port: int = 30000):
         self.device_ip = device_ip
         self.remote_port = remote_port
         self.local_port = local_port
+        self._last_request_time = 0
+        self._min_request_interval = 1.0  # Minimum 1 second between requests
         
     async def get_device_info(self, ble_mac: str):
+        """Send Marstek.GetDevice command once with rate limiting.
+
+        Returns the full parsed RPC response (dict) so callers can access the
+        top-level "id" which is required for subsequent API calls.
+        
+        Args:
+            ble_mac: BLE MAC address as string. Use "0" for discovery of all devices.
+        """
+        # Rate limiting: ensure minimum interval between requests
+        current_time = time.time()
+        time_since_last_request = current_time - self._last_request_time
+        
+        if time_since_last_request < self._min_request_interval:
+            sleep_time = self._min_request_interval - time_since_last_request
+            _LOGGER.debug("Rate limiting: waiting %.2f seconds before next request", sleep_time)
+            await asyncio.sleep(sleep_time)
+        
+        self._last_request_time = time.time()
         
         _LOGGER.info("Sending Marstek.GetDevice to %s:%s with BLE MAC: %s", self.device_ip, self.remote_port, ble_mac)
         
@@ -22,7 +45,7 @@ class MarstekUDPClient:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind(('', self.local_port))
-            sock.settimeout(5)
+            sock.settimeout(10)  # Extended timeout from 5 to 10 seconds
             
             rpc_id = random.randint(1000, 65000)
             # Ensure ble_mac is always a string

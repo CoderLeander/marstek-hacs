@@ -16,9 +16,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     remote_port = entry.data.get("remote_port", 30000)
     local_port = entry.data.get("local_port", 30000)
 
-    # Create client and request discovery (ble_mac=0)
+    # Create client and request discovery (ble_mac="0")
     client = MarstekUDPClient(device_ip, remote_port, local_port)
-    rpc_response = await client.get_device_info(0)
+    rpc_response = await client.get_device_info("0")
 
     if rpc_response is None:
         _LOGGER.error("Failed to get device info during setup")
