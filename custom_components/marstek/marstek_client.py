@@ -107,3 +107,39 @@ class MarstekUDPClient:
         """
         params = {"id": device_id}
         return await self._send_rpc_request("ES.GetMode", params)
+    
+    async def get_em_status(self, device_id: int):
+        """Send EM.GetStatus command to retrieve energy meter information.
+        
+        Args:
+            device_id: The device ID returned from the GetDevice call.
+            
+        Returns:
+            Full parsed RPC response (dict) containing energy meter status information.
+        """
+        params = {"id": device_id}
+        return await self._send_rpc_request("EM.GetStatus", params)
+    
+    async def get_wifi_status(self, device_id: int):
+        """Send Wifi.GetStatus command to retrieve WiFi connection information.
+        
+        Args:
+            device_id: The device ID returned from the GetDevice call.
+            
+        Returns:
+            Full parsed RPC response (dict) containing WiFi status information.
+        """
+        params = {"id": device_id}
+        return await self._send_rpc_request("Wifi.GetStatus", params)
+    
+    async def get_ble_status(self, device_id: int):
+        """Send BLE.GetStatus command to retrieve Bluetooth connection information.
+        
+        Args:
+            device_id: The device ID returned from the GetDevice call.
+            
+        Returns:
+            Full parsed RPC response (dict) containing BLE status information.
+        """
+        params = {"id": device_id}
+        return await self._send_rpc_request("BLE.GetStatus", params)
