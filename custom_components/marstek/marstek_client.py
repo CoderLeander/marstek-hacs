@@ -85,5 +85,25 @@ class MarstekUDPClient:
         return await self._send_rpc_request("Marstek.GetDevice", params)
     
     async def get_battery_status(self, device_id: int):
+        """Send Bat.GetStatus command to retrieve battery information.
+        
+        Args:
+            device_id: The device ID returned from the GetDevice call.
+            
+        Returns:
+            Full parsed RPC response (dict) containing battery status information.
+        """
         params = {"id": device_id}
         return await self._send_rpc_request("Bat.GetStatus", params)
+    
+    async def get_mode_status(self, device_id: int):
+        """Send ES.GetMode command to retrieve mode and power information.
+        
+        Args:
+            device_id: The device ID returned from the GetDevice call.
+            
+        Returns:
+            Full parsed RPC response (dict) containing mode and power information.
+        """
+        params = {"id": device_id}
+        return await self._send_rpc_request("ES.GetMode", params)
