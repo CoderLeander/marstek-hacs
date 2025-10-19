@@ -5,14 +5,19 @@
         "title": "Marstek Device",
         "data": {
           "device_ip": "Device IP",
-          "ble_mac": "BLE MAC", 
           "remote_port": "Remote Port",
           "local_port": "Local Port"
+        },
+        "data_description": {
+          "device_ip": "The IP address of your Marstek device on the network",
+          "remote_port": "Port number for communication with the device (default: 30000)",
+          "local_port": "Local port for receiving responses (default: 30000)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Cannot connect to device"
+      "cannot_connect": "Failed to connect to the Marstek device. Please check the IP address and ensure the device is powered on and connected to the network.",
+      "unknown": "An unexpected error occurred. Please try again or check the logs for more details."
     }
   }
 }

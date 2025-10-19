@@ -20,12 +20,12 @@ class MarstekUDPClient:
 
         Returns the full parsed RPC response (dict) so callers can access the
         top-level "id" which is required for subsequent API calls.
+        
+        Args:
+            ble_mac: BLE MAC address as string. Use "0" for discovery of all devices.
         """
-        # Normalize ble_mac to string per API docs. Use '0' for discovery.
-        if ble_mac is None:
-            ble_mac_param = "0"
-        else:
-            ble_mac_param = str(ble_mac)
+        # ble_mac should always be a string (either "0" for discovery or actual MAC)
+        ble_mac_param = ble_mac
 
         _LOGGER.info("Sending Marstek.GetDevice to %s:%s with BLE MAC: %s",
                      self.device_ip, self.remote_port, ble_mac_param)
