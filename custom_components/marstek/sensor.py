@@ -4,7 +4,7 @@ from homeassistant.components.sensor import SensorEntity, SensorEntityDescriptio
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 
 from .const import DOMAIN
 
@@ -16,37 +16,37 @@ DEVICE_INFO_SENSORS = [
         key="device_name",
         name="Device Name",
         icon="mdi:information",
-        entity_category="diagnostic",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="device_version",
         name="Device Version",
         icon="mdi:tag",
-        entity_category="diagnostic",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="ble_mac",
         name="BLE MAC Address",
         icon="mdi:bluetooth",
-        entity_category="diagnostic",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="wifi_mac",
         name="WiFi MAC Address",
         icon="mdi:wifi",
-        entity_category="diagnostic",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="wifi_name",
         name="WiFi Network Name",
         icon="mdi:wifi",
-        entity_category="diagnostic",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     SensorEntityDescription(
         key="device_reported_ip",
         name="Device IP Address",
         icon="mdi:ip-network",
-        entity_category="diagnostic",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 ]
 
