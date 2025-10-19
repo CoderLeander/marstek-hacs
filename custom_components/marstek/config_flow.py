@@ -41,12 +41,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         _LOGGER.debug("Testing connection to Marstek device at %s:%s", device_ip, remote_port)
 
+        device_response = None
         try:
             # Create MarstekUDPClient instance
             client = MarstekUDPClient(device_ip, remote_port, local_port)
 
             # Use string "0" to request discovery of all batteries on the network
-            if not await client.test_connection("0"):
+            device_response = await client.get_device_info("0")
+            if not device_response:
                 errors["base"] = "cannot_connect"
                 _LOGGER.warning("Failed to connect to Marstek device at %s:%s", device_ip, remote_port)
             
@@ -61,10 +63,29 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors=errors
             )
         
+        # Extract the ID from the response for future API calls
+        device_id = device_response.get("id") if device_response else None
+        
+        # Extract device information from the result section
+        result = device_response.get("result", {}) if device_response else {}
+        device_name = result.get("device")
+        device_version = result.get("ver")
+        ble_mac = result.get("ble_mac")
+        wifi_mac = result.get("wifi_mac")
+        wifi_name = result.get("wifi_name")
+        device_reported_ip = result.get("ip")
+        
         entry_data = {
             "device_ip": device_ip,
             "remote_port": remote_port,
             "local_port": local_port,
+            "device_id": device_id,
+            "device_name": device_name,
+            "device_version": device_version,
+            "ble_mac": ble_mac,
+            "wifi_mac": wifi_mac,
+            "wifi_name": wifi_name,
+            "device_reported_ip": device_reported_ip,
         }
 
         _LOGGER.info("Successfully configured Marstek device at %s:%s", device_ip, remote_port)

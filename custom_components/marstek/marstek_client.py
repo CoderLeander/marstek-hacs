@@ -3,12 +3,10 @@ import socket
 import json
 import random
 import logging
-import asyncio
 
 _LOGGER = logging.getLogger(__name__)
 
 class MarstekUDPClient:
-    """Simple UDP client for Marstek.GetDevice command only."""
     
     def __init__(self, device_ip: str, remote_port: int = 30000, local_port: int = 30000):
         self.device_ip = device_ip
@@ -16,19 +14,8 @@ class MarstekUDPClient:
         self.local_port = local_port
         
     async def get_device_info(self, ble_mac: str):
-        """Send Marstek.GetDevice command once.
-
-        Returns the full parsed RPC response (dict) so callers can access the
-        top-level "id" which is required for subsequent API calls.
         
-        Args:
-            ble_mac: BLE MAC address as string. Use "0" for discovery of all devices.
-        """
-        # ble_mac should always be a string (either "0" for discovery or actual MAC)
-        ble_mac_param = ble_mac
-
-        _LOGGER.info("Sending Marstek.GetDevice to %s:%s with BLE MAC: %s",
-                     self.device_ip, self.remote_port, ble_mac_param)
+        _LOGGER.info("Sending Marstek.GetDevice to %s:%s with BLE MAC: %s", self.device_ip, self.remote_port, ble_mac)
         
         sock = None
         try:
@@ -38,10 +25,12 @@ class MarstekUDPClient:
             sock.settimeout(5)
             
             rpc_id = random.randint(1000, 65000)
+            # Ensure ble_mac is always a string
+            ble_mac_str = str(ble_mac)
             req = {
                 "id": rpc_id,
                 "method": "Marstek.GetDevice",
-                "params": {"ble_mac": ble_mac_param}
+                "params": {"ble_mac": ble_mac_str}
             }
             
             message = json.dumps(req).encode('utf-8')
@@ -56,6 +45,13 @@ class MarstekUDPClient:
             _LOGGER.info("RESPONSE: %s", txt)
             
             obj = json.loads(txt)
+            
+            # Log the response ID specifically for tracking
+            if "id" in obj:
+                _LOGGER.info("Response ID: %s", obj["id"])
+            else:
+                _LOGGER.warning("No 'id' field found in response")
+            
             return obj
             
         except Exception as e:
@@ -66,7 +62,5 @@ class MarstekUDPClient:
                 sock.close()
     
     async def test_connection(self, ble_mac: str) -> bool:
-        """Test connection by sending Marstek.GetDevice once."""
         result = await self.get_device_info(ble_mac)
         return result is not None
-    
