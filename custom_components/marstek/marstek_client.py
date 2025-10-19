@@ -89,7 +89,7 @@ class MarstekUDPClient:
         return result is not None
     
     async def get_battery_status(self, device_id: int):
-        """Send ES.GetStatus command to retrieve battery information.
+        """Send Bat.GetStatus command to retrieve battery information.
         
         Args:
             device_id: The device ID returned from the GetDevice call.
@@ -108,7 +108,7 @@ class MarstekUDPClient:
         
         self._last_request_time = time.time()
         
-        _LOGGER.info("Sending ES.GetStatus to %s:%s with device ID: %s", self.device_ip, self.remote_port, device_id)
+        _LOGGER.info("Sending Bat.GetStatus to %s:%s with device ID: %s", self.device_ip, self.remote_port, device_id)
         
         sock = None
         try:
@@ -120,7 +120,7 @@ class MarstekUDPClient:
             rpc_id = random.randint(1000, 65000)
             req = {
                 "id": rpc_id,
-                "method": "ES.GetStatus",
+                "method": "Bat.GetStatus",
                 "params": {"id": device_id}
             }
             

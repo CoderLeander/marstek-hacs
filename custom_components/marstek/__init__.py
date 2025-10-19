@@ -2,6 +2,7 @@
 import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import device_registry as dr
 from .const import DOMAIN
 from .marstek_client import MarstekUDPClient
@@ -23,7 +24,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     rpc_id = entry.data.get("device_id")
     if rpc_id is None:
         _LOGGER.error("No device ID found in entry data - config flow may have failed")
-        return False
+        raise ConfigEntryNotReady("Device ID not found in config entry data")
 
     # Build device info from stored config entry data
     payload = {
@@ -40,11 +41,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     
     src = f"{payload.get('device', 'Unknown')} {payload.get('ver', '')}-{payload.get('ble_mac', 'unknown')}"
 
-    if payload is None:
-        _LOGGER.error("RPC response missing 'result' payload")
-        return False
+    # Validate that we have essential device information
+    if not payload.get("ble_mac") and not payload.get("wifi_mac"):
+        _LOGGER.error("No MAC address found in device data")
+        raise ConfigEntryNotReady("No MAC address found in device data")
 
-    # The payload usually contains device info. Build devices mapping keyed by ble_mac.
+    # The payload contains device info. Build devices mapping keyed by ble_mac.
     hass.data.setdefault(DOMAIN, {})
     devices = {}
 
@@ -100,10 +102,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         connections=set(),
     )
 
+    # Store integration data before forwarding to platforms
     hass.data[DOMAIN][entry.entry_id] = {"client": client, "rpc_id": rpc_id, "devices": devices}
 
-    # Forward setup to sensor platform
-    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
+    # Validate that we have all required data before forwarding to sensor platform
+    try:
+        # Forward setup to sensor platform
+        await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
+    except Exception as exc:
+        _LOGGER.exception("Failed to set up sensor platform: %s", exc)
+        # Clean up on failure
+        hass.data[DOMAIN].pop(entry.entry_id, None)
+        raise ConfigEntryNotReady(f"Failed to set up sensor platform: {exc}")
 
     _LOGGER.info("Setup complete - discovered %d devices (rpc id: %s)", len(devices), rpc_id)
     return True

@@ -54,47 +54,45 @@ DEVICE_INFO_SENSORS = [
     ),
 ]
 
-# Define sensor descriptions for battery status (common battery metrics)
+# Define sensor descriptions for battery status (based on actual Bat.GetStatus response)
 BATTERY_STATUS_SENSORS = [
     SensorEntityDescription(
-        key="battery_level",
-        name="Battery Level",
+        key="soc",
+        name="State of Charge",
         native_unit_of_measurement="%",
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:battery",
     ),
     SensorEntityDescription(
-        key="voltage",
-        name="Voltage",
-        native_unit_of_measurement="V",
-        device_class=SensorDeviceClass.VOLTAGE,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:lightning-bolt",
-    ),
-    SensorEntityDescription(
-        key="current",
-        name="Current",
-        native_unit_of_measurement="A",
-        device_class=SensorDeviceClass.CURRENT,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:current-ac",
-    ),
-    SensorEntityDescription(
-        key="power",
-        name="Power",
-        native_unit_of_measurement="W",
-        device_class=SensorDeviceClass.POWER,
-        state_class=SensorStateClass.MEASUREMENT,
-        icon="mdi:flash",
-    ),
-    SensorEntityDescription(
-        key="temperature",
-        name="Temperature",
+        key="bat_temp",
+        name="Battery Temperature",
         native_unit_of_measurement="°C",
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:thermometer",
+    ),
+    SensorEntityDescription(
+        key="bat_capacity",
+        name="Battery Capacity",
+        native_unit_of_measurement="Wh",
+        device_class=SensorDeviceClass.ENERGY_STORAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-capacity-variant",
+    ),
+    SensorEntityDescription(
+        key="rated_capacity",
+        name="Rated Capacity",
+        native_unit_of_measurement="Wh",
+        device_class=SensorDeviceClass.ENERGY_STORAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-capacity-outline",
+    ),
+    SensorEntityDescription(
+        key="error_code",
+        name="Error Code",
+        icon="mdi:alert-circle",
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
 ]
 
@@ -108,10 +106,14 @@ async def async_setup_entry(
     _LOGGER.debug("Setting up Marstek sensors for entry: %s", config_entry.entry_id)
     
     # Get client and device data from hass.data
-    integration_data = hass.data[DOMAIN][config_entry.entry_id]
-    client = integration_data["client"]
-    device_id = config_entry.data.get("device_id")
+    try:
+        integration_data = hass.data[DOMAIN][config_entry.entry_id]
+        client = integration_data["client"]
+    except KeyError:
+        _LOGGER.error("Integration data not found for entry %s", config_entry.entry_id)
+        return
     
+    device_id = config_entry.data.get("device_id")
     if device_id is None:
         _LOGGER.error("No device_id found in config entry")
         return
@@ -239,21 +241,31 @@ class MarstekBatteryStatusSensor(SensorEntity):
         if self.coordinator.data is None:
             return None
         
-        # Map sensor key to actual data field in the response
-        # This mapping will need to be adjusted based on actual API response
-        data_key_mapping = {
-            "battery_level": "soc",  # State of charge
-            "voltage": "voltage",
-            "current": "current", 
-            "power": "power",
-            "temperature": "temperature",
-        }
+        # Get the raw value from the API response
+        sensor_key = self.entity_description.key
+        raw_value = self.coordinator.data.get(sensor_key)
         
-        data_key = data_key_mapping.get(self.entity_description.key)
-        if data_key:
-            return self.coordinator.data.get(data_key)
+        if raw_value is None:
+            return None
         
-        return None
+        # Apply conversions based on the field
+        if sensor_key == "bat_temp":
+            # bat_temp should be divided by 10 (164.0 / 10 = 16.4°C)
+            return round(float(raw_value) / 10, 1)
+        elif sensor_key == "bat_capacity":
+            # bat_capacity should be multiplied by 10 (512.0 * 10 = 5120 Wh)
+            return round(float(raw_value) * 10, 1)
+        elif sensor_key == "rated_capacity":
+            # rated_capacity is already in correct unit (Wh)
+            return round(float(raw_value), 1)
+        elif sensor_key == "soc":
+            # State of charge is already in percentage
+            return int(raw_value)
+        elif sensor_key == "error_code":
+            # Error code as string
+            return str(raw_value)
+        
+        return raw_value
     
     @property
     def available(self) -> bool:
