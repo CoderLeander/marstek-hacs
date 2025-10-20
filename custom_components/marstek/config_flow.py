@@ -1,4 +1,5 @@
 """Config flow for Marstek integration."""
+import asyncio
 import logging
 import voluptuous as vol
 from homeassistant import config_entries
@@ -20,6 +21,30 @@ STEP_USER_DATA_SCHEMA = vol.Schema({
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 1
 
+    async def _test_connection_with_retries(self, client: MarstekUDPClient, max_retries: int = 3) -> dict | None:
+        """Test connection to device with retries."""
+        for attempt in range(max_retries):
+            try:
+                _LOGGER.debug("Connection attempt %d/%d to device", attempt + 1, max_retries)
+                
+                # Use string "0" to request discovery of all batteries on the network
+                device_response = await client.get_device_info("0")
+                
+                if device_response:
+                    _LOGGER.debug("Successfully connected on attempt %d/%d", attempt + 1, max_retries)
+                    return device_response
+                else:
+                    _LOGGER.warning("No response on attempt %d/%d", attempt + 1, max_retries)
+            
+            except Exception as exc:
+                _LOGGER.warning("Connection attempt %d/%d failed: %s", attempt + 1, max_retries, exc)
+            
+            # Wait before retry (except on last attempt)
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2)  # Wait 2 seconds between retries
+        
+        return None
+
     async def async_step_user(self, user_input=None) -> FlowResult:
         """Handle user step."""
         errors = {}
@@ -39,18 +64,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         await self.async_set_unique_id(device_ip)
         self._abort_if_unique_id_configured()
 
-        _LOGGER.debug("Testing connection to Marstek device at %s:%s", device_ip, remote_port)
+        _LOGGER.debug("Testing connection to Marstek device at %s:%s with up to 3 retries", device_ip, remote_port)
 
         device_response = None
         try:
             # Create MarstekUDPClient instance
             client = MarstekUDPClient(device_ip, remote_port, local_port)
 
-            # Use string "0" to request discovery of all batteries on the network
-            device_response = await client.get_device_info("0")
+            # Test connection with retries
+            device_response = await self._test_connection_with_retries(client, max_retries=3)
             if not device_response:
                 errors["base"] = "cannot_connect"
-                _LOGGER.warning("Failed to connect to Marstek device at %s:%s", device_ip, remote_port)
+                _LOGGER.warning("Failed to connect to Marstek device at %s:%s after 3 attempts", device_ip, remote_port)
             
         except Exception as exc:
             _LOGGER.exception("Unexpected error connecting to Marstek device: %s", exc)
