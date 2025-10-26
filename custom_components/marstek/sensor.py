@@ -10,7 +10,9 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import DOMAIN
 
-SCAN_INTERVAL = timedelta(minutes=1)
+# Two intervals: battery (faster) and combined status (slower)
+BATTERY_SCAN_INTERVAL = timedelta(minutes=1)
+STATUS_SCAN_INTERVAL = timedelta(minutes=5)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -277,71 +279,35 @@ async def async_setup_entry(
         sensors.append(sensor)
         _LOGGER.debug("Created battery status sensor: %s", description.name)
     
-    # Create data coordinator for mode status updates
-    mode_coordinator = MarstekModeDataUpdateCoordinator(hass, client, device_id)
-    
-    # Perform initial mode data fetch (but don't fail if it doesn't work immediately)
+    # Create a single combined data coordinator for mode, EM, WiFi and BLE status updates
+    status_coordinator = MarstekStatusDataUpdateCoordinator(hass, client, device_id)
+
+    # Perform initial combined data fetch (but don't fail if it doesn't work immediately)
     try:
-        await mode_coordinator.async_config_entry_first_refresh()
+        await status_coordinator.async_config_entry_first_refresh()
     except Exception as exc:
-        _LOGGER.warning("Initial mode data fetch failed, will retry later: %s", exc)
+        _LOGGER.warning("Initial combined status data fetch failed, will retry later: %s", exc)
         # Don't fail setup, just continue without initial data
         # The coordinator will keep trying on the regular update interval
-    
-    # Create sensors for mode status (dynamic data)
+
+    # Create sensors for mode, EM, WiFi and BLE (dynamic data) using the combined coordinator
     for description in MODE_STATUS_SENSORS:
-        sensor = MarstekModeStatusSensor(mode_coordinator, config_entry, description)
+        sensor = MarstekModeStatusSensor(status_coordinator, config_entry, description)
         sensors.append(sensor)
         _LOGGER.debug("Created mode status sensor: %s", description.name)
-    
-    # Create data coordinator for EM status updates
-    em_coordinator = MarstekEMDataUpdateCoordinator(hass, client, device_id)
-    
-    # Perform initial EM data fetch (but don't fail if it doesn't work immediately)
-    try:
-        await em_coordinator.async_config_entry_first_refresh()
-    except Exception as exc:
-        _LOGGER.warning("Initial EM data fetch failed, will retry later: %s", exc)
-        # Don't fail setup, just continue without initial data
-        # The coordinator will keep trying on the regular update interval
-    
-    # Create sensors for EM status (dynamic data)
+
     for description in EM_STATUS_SENSORS:
-        sensor = MarstekEMStatusSensor(em_coordinator, config_entry, description)
+        sensor = MarstekEMStatusSensor(status_coordinator, config_entry, description)
         sensors.append(sensor)
         _LOGGER.debug("Created EM status sensor: %s", description.name)
-    
-    # Create data coordinator for WiFi status updates
-    wifi_coordinator = MarstekWifiDataUpdateCoordinator(hass, client, device_id)
-    
-    # Perform initial WiFi data fetch (but don't fail if it doesn't work immediately)
-    try:
-        await wifi_coordinator.async_config_entry_first_refresh()
-    except Exception as exc:
-        _LOGGER.warning("Initial WiFi data fetch failed, will retry later: %s", exc)
-        # Don't fail setup, just continue without initial data
-        # The coordinator will keep trying on the regular update interval
-    
-    # Create sensors for WiFi status (dynamic data)
+
     for description in WIFI_STATUS_SENSORS:
-        sensor = MarstekWifiStatusSensor(wifi_coordinator, config_entry, description)
+        sensor = MarstekWifiStatusSensor(status_coordinator, config_entry, description)
         sensors.append(sensor)
         _LOGGER.debug("Created WiFi status sensor: %s", description.name)
-    
-    # Create data coordinator for BLE status updates
-    ble_coordinator = MarstekBLEDataUpdateCoordinator(hass, client, device_id)
-    
-    # Perform initial BLE data fetch (but don't fail if it doesn't work immediately)
-    try:
-        await ble_coordinator.async_config_entry_first_refresh()
-    except Exception as exc:
-        _LOGGER.warning("Initial BLE data fetch failed, will retry later: %s", exc)
-        # Don't fail setup, just continue without initial data
-        # The coordinator will keep trying on the regular update interval
-    
-    # Create sensors for BLE status (dynamic data)
+
     for description in BLE_STATUS_SENSORS:
-        sensor = MarstekBLEStatusSensor(ble_coordinator, config_entry, description)
+        sensor = MarstekBLEStatusSensor(status_coordinator, config_entry, description)
         sensors.append(sensor)
         _LOGGER.debug("Created BLE status sensor: %s", description.name)
     
@@ -396,7 +362,7 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
             hass,
             _LOGGER,
             name=DOMAIN,
-            update_interval=SCAN_INTERVAL,
+            update_interval=BATTERY_SCAN_INTERVAL,
         )
 
     async def _async_update_data(self):
@@ -420,147 +386,39 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
             return getattr(self, 'data', {})
 
 
-class MarstekModeDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching Marstek mode data."""
+class MarstekStatusDataUpdateCoordinator(DataUpdateCoordinator):
+    """Coordinator that fetches mode, EM, WiFi and BLE in one update."""
 
     def __init__(self, hass: HomeAssistant, client, device_id: int):
-        """Initialize."""
         self.client = client
         self.device_id = device_id
-        
         super().__init__(
             hass,
             _LOGGER,
-            name=f"{DOMAIN}_mode",
-            update_interval=SCAN_INTERVAL,
+            name=f"{DOMAIN}_status",
+            update_interval=STATUS_SCAN_INTERVAL,
         )
 
     async def _async_update_data(self):
-        """Update data via library."""
+        """Fetch multiple endpoints sequentially and return combined dict."""
+        data = {}
         try:
-            mode_data = await self.client.get_mode_status(self.device_id)
-            if mode_data is None:
-                _LOGGER.warning("Failed to fetch mode status - device may be busy or unreachable")
-                # Return previous data if available, or empty dict for first attempt
-                return getattr(self, 'data', {})
-            
-            # Extract the result section which contains the actual mode data
-            result = mode_data.get("result", {})
-            
-            _LOGGER.debug("Mode status data: %s", result)
-            return result
-            
-        except Exception as exception:
-            _LOGGER.warning("Error communicating with mode API: %s", exception)
-            # Return previous data if available, or empty dict for first attempt  
-            return getattr(self, 'data', {})
+            # Fetch sequentially to respect client rate limits
+            mode_resp = await self.client.get_mode_status(self.device_id)
+            em_resp = await self.client.get_em_status(self.device_id)
+            wifi_resp = await self.client.get_wifi_status(self.device_id)
+            ble_resp = await self.client.get_ble_status(self.device_id)
 
+            data["mode"] = (mode_resp or {}).get("result", {}) if mode_resp is not None else getattr(self, 'data', {}).get("mode", {})
+            data["em"] = (em_resp or {}).get("result", {}) if em_resp is not None else getattr(self, 'data', {}).get("em", {})
+            data["wifi"] = (wifi_resp or {}).get("result", {}) if wifi_resp is not None else getattr(self, 'data', {}).get("wifi", {})
+            data["ble"] = (ble_resp or {}).get("result", {}) if ble_resp is not None else getattr(self, 'data', {}).get("ble", {})
 
-class MarstekEMDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching Marstek energy meter data."""
+            _LOGGER.debug("Combined status data: %s", data)
+            return data
 
-    def __init__(self, hass: HomeAssistant, client, device_id: int):
-        """Initialize."""
-        self.client = client
-        self.device_id = device_id
-        
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=f"{DOMAIN}_em",
-            update_interval=SCAN_INTERVAL,
-        )
-
-    async def _async_update_data(self):
-        """Update data via library."""
-        try:
-            em_data = await self.client.get_em_status(self.device_id)
-            if em_data is None:
-                _LOGGER.warning("Failed to fetch EM status - device may be busy or unreachable")
-                # Return previous data if available, or empty dict for first attempt
-                return getattr(self, 'data', {})
-            
-            # Extract the result section which contains the actual EM data
-            result = em_data.get("result", {})
-            
-            _LOGGER.debug("EM status data: %s", result)
-            return result
-            
-        except Exception as exception:
-            _LOGGER.warning("Error communicating with EM API: %s", exception)
-            # Return previous data if available, or empty dict for first attempt  
-            return getattr(self, 'data', {})
-
-
-class MarstekWifiDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching Marstek WiFi data."""
-
-    def __init__(self, hass: HomeAssistant, client, device_id: int):
-        """Initialize."""
-        self.client = client
-        self.device_id = device_id
-        
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=f"{DOMAIN}_wifi",
-            update_interval=SCAN_INTERVAL,
-        )
-
-    async def _async_update_data(self):
-        """Update data via library."""
-        try:
-            wifi_data = await self.client.get_wifi_status(self.device_id)
-            if wifi_data is None:
-                _LOGGER.warning("Failed to fetch WiFi status - device may be busy or unreachable")
-                # Return previous data if available, or empty dict for first attempt
-                return getattr(self, 'data', {})
-            
-            # Extract the result section which contains the actual WiFi data
-            result = wifi_data.get("result", {})
-            
-            _LOGGER.debug("WiFi status data: %s", result)
-            return result
-            
-        except Exception as exception:
-            _LOGGER.warning("Error communicating with WiFi API: %s", exception)
-            # Return previous data if available, or empty dict for first attempt  
-            return getattr(self, 'data', {})
-
-
-class MarstekBLEDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching Marstek BLE data."""
-
-    def __init__(self, hass: HomeAssistant, client, device_id: int):
-        """Initialize."""
-        self.client = client
-        self.device_id = device_id
-        
-        super().__init__(
-            hass,
-            _LOGGER,
-            name=f"{DOMAIN}_ble",
-            update_interval=SCAN_INTERVAL,
-        )
-
-    async def _async_update_data(self):
-        """Update data via library."""
-        try:
-            ble_data = await self.client.get_ble_status(self.device_id)
-            if ble_data is None:
-                _LOGGER.warning("Failed to fetch BLE status - device may be busy or unreachable")
-                # Return previous data if available, or empty dict for first attempt
-                return getattr(self, 'data', {})
-            
-            # Extract the result section which contains the actual BLE data
-            result = ble_data.get("result", {})
-            
-            _LOGGER.debug("BLE status data: %s", result)
-            return result
-            
-        except Exception as exception:
-            _LOGGER.warning("Error communicating with BLE API: %s", exception)
-            # Return previous data if available, or empty dict for first attempt  
+        except Exception as exc:
+            _LOGGER.warning("Error fetching combined status data: %s", exc)
             return getattr(self, 'data', {})
 
 
@@ -639,7 +497,7 @@ class MarstekBatteryStatusSensor(SensorEntity):
 class MarstekModeStatusSensor(SensorEntity):
     """Sensor for Marstek mode status information."""
     
-    def __init__(self, coordinator: MarstekModeDataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
         """Initialize the sensor."""
         self.entity_description = description
         self.coordinator = coordinator
@@ -667,15 +525,16 @@ class MarstekModeStatusSensor(SensorEntity):
         """Return the state of the sensor."""
         if self.coordinator.data is None:
             return None
-        
-        # Get the raw value from the API response
+
+        # The combined coordinator stores mode data under the 'mode' key
+        section = self.coordinator.data.get("mode", {})
         sensor_key = self.entity_description.key
-        
+
         # Handle the special case of bat_soc from mode (different from battery status)
         if sensor_key == "bat_soc_mode":
-            raw_value = self.coordinator.data.get("bat_soc")
+            raw_value = section.get("bat_soc")
         else:
-            raw_value = self.coordinator.data.get(sensor_key)
+            raw_value = section.get(sensor_key)
         
         if raw_value is None:
             return None
@@ -710,7 +569,7 @@ class MarstekModeStatusSensor(SensorEntity):
 class MarstekEMStatusSensor(SensorEntity):
     """Sensor for Marstek energy meter status information."""
     
-    def __init__(self, coordinator: MarstekEMDataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
         """Initialize the sensor."""
         self.entity_description = description
         self.coordinator = coordinator
@@ -738,10 +597,11 @@ class MarstekEMStatusSensor(SensorEntity):
         """Return the state of the sensor."""
         if self.coordinator.data is None:
             return None
-        
-        # Get the raw value from the API response
+
+        # The combined coordinator stores EM data under the 'em' key
+        section = self.coordinator.data.get("em", {})
         sensor_key = self.entity_description.key
-        raw_value = self.coordinator.data.get(sensor_key)
+        raw_value = section.get(sensor_key)
         
         if raw_value is None:
             return None
@@ -773,7 +633,7 @@ class MarstekEMStatusSensor(SensorEntity):
 class MarstekWifiStatusSensor(SensorEntity):
     """Sensor for Marstek WiFi status information."""
     
-    def __init__(self, coordinator: MarstekWifiDataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
         """Initialize the sensor."""
         self.entity_description = description
         self.coordinator = coordinator
@@ -801,10 +661,11 @@ class MarstekWifiStatusSensor(SensorEntity):
         """Return the state of the sensor."""
         if self.coordinator.data is None:
             return None
-        
-        # Get the raw value from the API response
+
+        # The combined coordinator stores WiFi data under the 'wifi' key
+        section = self.coordinator.data.get("wifi", {})
         sensor_key = self.entity_description.key
-        raw_value = self.coordinator.data.get(sensor_key)
+        raw_value = section.get(sensor_key)
         
         if raw_value is None:
             return None
@@ -836,7 +697,7 @@ class MarstekWifiStatusSensor(SensorEntity):
 class MarstekBLEStatusSensor(SensorEntity):
     """Sensor for Marstek BLE status information."""
     
-    def __init__(self, coordinator: MarstekBLEDataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
+    def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
         """Initialize the sensor."""
         self.entity_description = description
         self.coordinator = coordinator
@@ -864,10 +725,11 @@ class MarstekBLEStatusSensor(SensorEntity):
         """Return the state of the sensor."""
         if self.coordinator.data is None:
             return None
-        
-        # Get the raw value from the API response
+
+        # The combined coordinator stores BLE data under the 'ble' key
+        section = self.coordinator.data.get("ble", {})
         sensor_key = self.entity_description.key
-        raw_value = self.coordinator.data.get(sensor_key)
+        raw_value = section.get(sensor_key)
         
         if raw_value is None:
             return None
