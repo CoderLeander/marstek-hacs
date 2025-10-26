@@ -264,14 +264,9 @@ async def async_setup_entry(
     
     # Create data coordinator for battery status updates
     coordinator = MarstekDataUpdateCoordinator(hass, client, device_id)
-    
-    # Perform initial data fetch (but don't fail if it doesn't work immediately)
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except Exception as exc:
-        _LOGGER.warning("Initial battery data fetch failed, will retry later: %s", exc)
-        # Don't fail setup, just continue without initial data
-        # The coordinator will keep trying on the regular update interval
+    # NOTE: intentionally not awaiting an initial refresh here to avoid
+    # a burst of RPCs during integration setup. The coordinator will
+    # perform its first update on its scheduled `BATTERY_SCAN_INTERVAL`.
     
     # Create sensors for battery status (dynamic data)
     for description in BATTERY_STATUS_SENSORS:
@@ -281,14 +276,10 @@ async def async_setup_entry(
     
     # Create a single combined data coordinator for mode, EM, WiFi and BLE status updates
     status_coordinator = MarstekStatusDataUpdateCoordinator(hass, client, device_id)
-
-    # Perform initial combined data fetch (but don't fail if it doesn't work immediately)
-    try:
-        await status_coordinator.async_config_entry_first_refresh()
-    except Exception as exc:
-        _LOGGER.warning("Initial combined status data fetch failed, will retry later: %s", exc)
-        # Don't fail setup, just continue without initial data
-        # The coordinator will keep trying on the regular update interval
+    # NOTE: intentionally not awaiting an initial refresh here to avoid
+    # sending multiple RPCs immediately when the integration is added.
+    # The coordinator will perform its first update on its scheduled
+    # `STATUS_SCAN_INTERVAL`.
 
     # Create sensors for mode, EM, WiFi and BLE (dynamic data) using the combined coordinator
     for description in MODE_STATUS_SENSORS:
