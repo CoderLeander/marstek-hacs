@@ -369,6 +369,15 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
             result = battery_data.get("result", {})
             
             _LOGGER.debug("Battery status data: %s", result)
+            # Log successful battery query
+            try:
+                _LOGGER.info(
+                    "Marstek: Bat.GetStatus succeeded for device %s - fields=%s",
+                    self.device_id,
+                    list(result.keys()),
+                )
+            except Exception:
+                _LOGGER.info("Marstek: Bat.GetStatus succeeded for device %s", self.device_id)
             return result
             
         except Exception as exception:
@@ -404,6 +413,55 @@ class MarstekStatusDataUpdateCoordinator(DataUpdateCoordinator):
             data["em"] = (em_resp or {}).get("result", {}) if em_resp is not None else getattr(self, 'data', {}).get("em", {})
             data["wifi"] = (wifi_resp or {}).get("result", {}) if wifi_resp is not None else getattr(self, 'data', {}).get("wifi", {})
             data["ble"] = (ble_resp or {}).get("result", {}) if ble_resp is not None else getattr(self, 'data', {}).get("ble", {})
+
+            # Log successes for each endpoint
+            if mode_resp is not None:
+                try:
+                    _LOGGER.info(
+                        "Marstek: ES.GetMode succeeded for device %s - fields=%s",
+                        self.device_id,
+                        list(data["mode"].keys()),
+                    )
+                except Exception:
+                    _LOGGER.info("Marstek: ES.GetMode succeeded for device %s", self.device_id)
+            else:
+                _LOGGER.info("Marstek: ES.GetMode returned no response for device %s", self.device_id)
+
+            if em_resp is not None:
+                try:
+                    _LOGGER.info(
+                        "Marstek: EM.GetStatus succeeded for device %s - fields=%s",
+                        self.device_id,
+                        list(data["em"].keys()),
+                    )
+                except Exception:
+                    _LOGGER.info("Marstek: EM.GetStatus succeeded for device %s", self.device_id)
+            else:
+                _LOGGER.info("Marstek: EM.GetStatus returned no response for device %s", self.device_id)
+
+            if wifi_resp is not None:
+                try:
+                    _LOGGER.info(
+                        "Marstek: Wifi.GetStatus succeeded for device %s - fields=%s",
+                        self.device_id,
+                        list(data["wifi"].keys()),
+                    )
+                except Exception:
+                    _LOGGER.info("Marstek: Wifi.GetStatus succeeded for device %s", self.device_id)
+            else:
+                _LOGGER.info("Marstek: Wifi.GetStatus returned no response for device %s", self.device_id)
+
+            if ble_resp is not None:
+                try:
+                    _LOGGER.info(
+                        "Marstek: BLE.GetStatus succeeded for device %s - fields=%s",
+                        self.device_id,
+                        list(data["ble"].keys()),
+                    )
+                except Exception:
+                    _LOGGER.info("Marstek: BLE.GetStatus succeeded for device %s", self.device_id)
+            else:
+                _LOGGER.info("Marstek: BLE.GetStatus returned no response for device %s", self.device_id)
 
             _LOGGER.debug("Combined status data: %s", data)
             return data
