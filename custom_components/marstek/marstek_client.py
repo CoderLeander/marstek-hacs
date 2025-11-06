@@ -51,26 +51,44 @@ class MarstekUDPClient:
                         raise e
                     _LOGGER.debug("Port %d busy, trying %d", port_to_try, port_to_try + 1)
             
-            sock.settimeout(10)  # 10 second timeout
-            
-            rpc_id = random.randint(1000, 65000)
-            req = {
-                "id": rpc_id,
-                "method": method,
-                "params": params
-            }
-            
-            message = json.dumps(req).encode('utf-8')
-            _LOGGER.info("REQUEST: %s", message.decode('utf-8'))
-            
-            sock.sendto(message, (self.device_ip, self.remote_port))
-            response, addr = sock.recvfrom(4096)
-            
-            txt = response.decode('utf-8')
-            _LOGGER.info("RESPONSE: %s", txt)
-            
-            obj = json.loads(txt)            
-            return obj
+            # Small socket timeout so the call does not block the event loop
+            # for long. We intentionally keep this low (100ms) and perform a
+            # small number of retries below if we detect a timeout — this
+            # handles occasional packet loss or missed responses while keeping
+            # the integration responsive.
+            sock.settimeout(0.1)
+
+            max_send_retries = 3
+            for send_attempt in range(1, max_send_retries + 1):
+                try:
+                    rpc_id = random.randint(1000, 65000)
+                    req = {
+                        "id": rpc_id,
+                        "method": method,
+                        "params": params
+                    }
+
+                    message = json.dumps(req).encode('utf-8')
+                    _LOGGER.info("REQUEST (attempt %d/%d): %s", send_attempt, max_send_retries, message.decode('utf-8'))
+
+                    sock.sendto(message, (self.device_ip, self.remote_port))
+                    response, addr = sock.recvfrom(4096)
+
+                    txt = response.decode('utf-8')
+                    _LOGGER.info("RESPONSE: %s", txt)
+
+                    obj = json.loads(txt)
+                    return obj
+
+                except socket.timeout:
+                    # No response within the socket timeout — retry a few times
+                    # _LOGGER.warning("Timeout waiting for response (attempt %d/%d). Retrying...", send_attempt, max_send_retries)
+                    if send_attempt < max_send_retries:
+                        # brief backoff to avoid immediate retries
+                        await asyncio.sleep(0.05)
+                        continue
+                    _LOGGER.error("No response after %d attempts", max_send_retries)
+                    return None
             
         except Exception as e:
             _LOGGER.error("Error sending %s request: %s", method, e)
@@ -85,61 +103,21 @@ class MarstekUDPClient:
         return await self._send_rpc_request("Marstek.GetDevice", params)
     
     async def get_battery_status(self, device_id: int):
-        """Send Bat.GetStatus command to retrieve battery information.
-        
-        Args:
-            device_id: The device ID returned from the GetDevice call.
-            
-        Returns:
-            Full parsed RPC response (dict) containing battery status information.
-        """
         params = {"id": device_id}
         return await self._send_rpc_request("Bat.GetStatus", params)
     
     async def get_mode_status(self, device_id: int):
-        """Send ES.GetMode command to retrieve mode and power information.
-        
-        Args:
-            device_id: The device ID returned from the GetDevice call.
-            
-        Returns:
-            Full parsed RPC response (dict) containing mode and power information.
-        """
         params = {"id": device_id}
         return await self._send_rpc_request("ES.GetMode", params)
     
     async def get_em_status(self, device_id: int):
-        """Send EM.GetStatus command to retrieve energy meter information.
-        
-        Args:
-            device_id: The device ID returned from the GetDevice call.
-            
-        Returns:
-            Full parsed RPC response (dict) containing energy meter status information.
-        """
         params = {"id": device_id}
         return await self._send_rpc_request("EM.GetStatus", params)
     
     async def get_wifi_status(self, device_id: int):
-        """Send Wifi.GetStatus command to retrieve WiFi connection information.
-        
-        Args:
-            device_id: The device ID returned from the GetDevice call.
-            
-        Returns:
-            Full parsed RPC response (dict) containing WiFi status information.
-        """
         params = {"id": device_id}
         return await self._send_rpc_request("Wifi.GetStatus", params)
     
     async def get_ble_status(self, device_id: int):
-        """Send BLE.GetStatus command to retrieve Bluetooth connection information.
-        
-        Args:
-            device_id: The device ID returned from the GetDevice call.
-            
-        Returns:
-            Full parsed RPC response (dict) containing BLE status information.
-        """
         params = {"id": device_id}
         return await self._send_rpc_request("BLE.GetStatus", params)
