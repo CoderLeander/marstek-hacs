@@ -532,19 +532,18 @@ class MarstekModeStatusSensor(SensorEntity):
         if self.coordinator.data is None:
             return None
 
-        # The combined coordinator stores mode data under the 'mode' key
-        section = self.coordinator.data.get("mode", {})
+        # After refactor, coordinator.data is the ES.GetMode result dict directly
         sensor_key = self.entity_description.key
 
         # Handle the special case of bat_soc from mode (different from battery status)
         if sensor_key == "bat_soc_mode":
-            raw_value = section.get("bat_soc")
+            raw_value = self.coordinator.data.get("bat_soc")
         else:
-            raw_value = section.get(sensor_key)
-        
+            raw_value = self.coordinator.data.get(sensor_key)
+
         if raw_value is None:
             return None
-        
+
         # Apply conversions if needed
         if sensor_key in ["ongrid_power", "offgrid_power"]:
             # Power values are already in watts
@@ -555,7 +554,7 @@ class MarstekModeStatusSensor(SensorEntity):
         elif sensor_key == "mode":
             # Mode as string
             return str(raw_value)
-        
+
         return raw_value
     
     @property
