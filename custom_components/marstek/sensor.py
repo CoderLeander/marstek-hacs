@@ -277,30 +277,30 @@ async def async_setup_entry(
         sensors.append(sensor)
         _LOGGER.debug("Created device info sensor: %s", description.name)
     
-    # Create data coordinator for battery status updates
+    # Create data coordinator for fast updates (ES.GetMode every 10 seconds)
     coordinator = MarstekDataUpdateCoordinator(hass, client, device_id)
     # NOTE: intentionally not awaiting an initial refresh here to avoid
     # a burst of RPCs during integration setup. The coordinator will
     # perform its first update on its scheduled `BATTERY_SCAN_INTERVAL`.
+    
+    # Create sensors for mode using the fast-updating coordinator (ES.GetMode every 10 seconds)
+    for description in MODE_STATUS_SENSORS:
+        sensor = MarstekModeStatusSensor(coordinator, config_entry, description)
+        sensors.append(sensor)
+        _LOGGER.debug("Created mode status sensor: %s", description.name)
+        
+    # Create a single combined data coordinator for slower status updates (EM, WiFi, BLE, Bat every 60 minutes)
+    status_coordinator = MarstekStatusDataUpdateCoordinator(hass, client, device_id)
+    # NOTE: intentionally not awaiting an initial refresh here to avoid
+    # sending multiple RPCs immediately when the integration is added.
+    # The coordinator will perform its first update on its scheduled
+    # `STATUS_SCAN_INTERVAL`.
     
     # Create sensors for battery status (dynamic data)
     for description in BATTERY_STATUS_SENSORS:
         sensor = MarstekBatteryStatusSensor(coordinator, config_entry, description)
         sensors.append(sensor)
         _LOGGER.debug("Created battery status sensor: %s", description.name)
-    
-    # Create a single combined data coordinator for mode, EM, WiFi and BLE status updates
-    status_coordinator = MarstekStatusDataUpdateCoordinator(hass, client, device_id)
-    # NOTE: intentionally not awaiting an initial refresh here to avoid
-    # sending multiple RPCs immediately when the integration is added.
-    # The coordinator will perform its first update on its scheduled
-    # `STATUS_SCAN_INTERVAL`.
-
-    # Create sensors for mode, EM, WiFi and BLE (dynamic data) using the combined coordinator
-    for description in MODE_STATUS_SENSORS:
-        sensor = MarstekModeStatusSensor(status_coordinator, config_entry, description)
-        sensors.append(sensor)
-        _LOGGER.debug("Created mode status sensor: %s", description.name)
 
     for description in EM_STATUS_SENSORS:
         sensor = MarstekEMStatusSensor(status_coordinator, config_entry, description)
@@ -369,20 +369,27 @@ class MarstekStatusDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_update_data(self):
-        """Fetch EM, WiFi, BLE, and Bat status sequentially and return combined dict."""
+        """Fetch ES.GetMode, EM, WiFi, BLE, and Bat status sequentially and return combined dict."""
         data = {}
         try:
+            # Add ES.GetMode call for mode status sensors
+            mode_resp = await self.client.get_mode_status(self.device_id)
             em_resp = await self.client.get_em_status(self.device_id)
             wifi_resp = await self.client.get_wifi_status(self.device_id)
             ble_resp = await self.client.get_ble_status(self.device_id)
             bat_resp = await self.client.get_battery_status(self.device_id)
 
+            # Store mode data at root level for backward compatibility with MarstekModeStatusSensor
+            mode_result = (mode_resp or {}).get("result", {}) if mode_resp is not None else getattr(self, 'data', {}).get("mode", {})
+            data.update(mode_result)  # Add mode fields directly to data dict
+            
             data["em"] = (em_resp or {}).get("result", {}) if em_resp is not None else getattr(self, 'data', {}).get("em", {})
             data["wifi"] = (wifi_resp or {}).get("result", {}) if wifi_resp is not None else getattr(self, 'data', {}).get("wifi", {})
             data["ble"] = (ble_resp or {}).get("result", {}) if ble_resp is not None else getattr(self, 'data', {}).get("ble", {})
             data["bat"] = (bat_resp or {}).get("result", {}) if bat_resp is not None else getattr(self, 'data', {}).get("bat", {})
 
             # Log results for each endpoint using shared helper
+            log_status_result(_LOGGER, self.device_id, "ES.GetMode", mode_resp, mode_result)
             log_status_result(_LOGGER, self.device_id, "EM.GetStatus", em_resp, data["em"])
             log_status_result(_LOGGER, self.device_id, "Wifi.GetStatus", wifi_resp, data["wifi"])
             log_status_result(_LOGGER, self.device_id, "BLE.GetStatus", ble_resp, data["ble"])
@@ -530,6 +537,7 @@ class MarstekModeStatusSensor(SensorEntity):
     def native_value(self):
         """Return the state of the sensor."""
         if self.coordinator.data is None:
+            _LOGGER.warning("Mode sensor %s: coordinator data is None", self.entity_description.key)
             return None
 
         # After refactor, coordinator.data is the ES.GetMode result dict directly
@@ -538,10 +546,15 @@ class MarstekModeStatusSensor(SensorEntity):
         # Handle the special case of bat_soc from mode (different from battery status)
         if sensor_key == "bat_soc_mode":
             raw_value = self.coordinator.data.get("bat_soc")
+            _LOGGER.debug("Mode sensor bat_soc_mode: raw_value=%s from coordinator data keys=%s", 
+                         raw_value, list(self.coordinator.data.keys()))
         else:
             raw_value = self.coordinator.data.get(sensor_key)
+            _LOGGER.debug("Mode sensor %s: raw_value=%s from coordinator data keys=%s", 
+                         sensor_key, raw_value, list(self.coordinator.data.keys()))
 
         if raw_value is None:
+            _LOGGER.warning("Mode sensor %s: raw_value is None after lookup", sensor_key)
             return None
 
         # Apply conversions if needed
