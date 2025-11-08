@@ -130,6 +130,22 @@ MODE_STATUS_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:battery-outline",
     ),
+    SensorEntityDescription(
+        key="charging_power",
+        name="Battery Charging Power",
+        native_unit_of_measurement="W",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-charging",
+    ),
+    SensorEntityDescription(
+        key="discharging_power",
+        name="Battery Discharging Power",
+        native_unit_of_measurement="W",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-minus",
+    ),
 ]
 
 # Define sensor descriptions for energy meter status (from EM.GetStatus response)
@@ -500,6 +516,25 @@ class MarstekModeStatusSensor(MarstekCoordinatorEntity):
             raw_value = self.coordinator.data.get("bat_soc")
             _LOGGER.debug("Mode sensor bat_soc_mode: raw_value=%s from coordinator data keys=%s", 
                          raw_value, list(self.coordinator.data.keys()))
+        # Calculated sensors based on ongrid_power
+        elif sensor_key == "charging_power":
+            if self.coordinator.data is None:
+                return None
+            ongrid_power = self.coordinator.data.get("ongrid_power")
+            if ongrid_power is None:
+                return None
+            # Negative ongrid_power means charging, return as positive value
+            power_value = int(ongrid_power)
+            return abs(power_value) if power_value < 0 else 0
+        elif sensor_key == "discharging_power":
+            if self.coordinator.data is None:
+                return None
+            ongrid_power = self.coordinator.data.get("ongrid_power")
+            if ongrid_power is None:
+                return None
+            # Positive ongrid_power means discharging
+            power_value = int(ongrid_power)
+            return power_value if power_value > 0 else 0
         else:
             raw_value = self._get_value_from_section()
             _LOGGER.debug("Mode sensor %s: raw_value=%s from coordinator data keys=%s", 
