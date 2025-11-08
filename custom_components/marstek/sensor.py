@@ -379,14 +379,28 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
         """Update data via ES.GetMode only."""
         try:
             mode_data = await self.client.get_mode_status(self.device_id)
+            
+            # Check if we got an error response
+            if mode_data and "error" in mode_data:
+                _LOGGER.warning("ES.GetMode returned error: %s", mode_data.get("error"))
+                # Return previous data to keep sensors at their last known values
+                return getattr(self, 'data', {})
+            
+            # Extract result
             result = mode_data.get("result", {}) if mode_data is not None else {}
 
             _LOGGER.debug("Mode status data: %s", result)
             log_status_result(_LOGGER, self.device_id, "ES.GetMode", mode_data, result)
 
+            # If we got empty result, keep previous data
+            if not result and mode_data is not None:
+                _LOGGER.warning("ES.GetMode returned empty result, keeping previous data")
+                return getattr(self, 'data', {})
+            
             if mode_data is None:
                 # Return previous data if available, or empty dict for first attempt
                 return getattr(self, 'data', {})
+            
             return result
 
         except Exception as exception:
@@ -418,12 +432,24 @@ class MarstekStatusDataUpdateCoordinator(DataUpdateCoordinator):
             ble_resp = await self.client.get_ble_status(self.device_id)
             bat_resp = await self.client.get_battery_status(self.device_id)
             
-            # Build data dict, using previous data if API call fails
+            # Helper function to extract result or use previous data
+            def get_result_or_previous(resp, section_key):
+                # If response has error, use previous data
+                if resp and "error" in resp:
+                    _LOGGER.warning("%s returned error: %s, keeping previous data", section_key, resp.get("error"))
+                    return previous_data.get(section_key, {})
+                # If response has result, use it
+                if resp and "result" in resp:
+                    return resp.get("result", {})
+                # Otherwise use previous data
+                return previous_data.get(section_key, {})
+            
+            # Build data dict, using previous data if API call fails or returns error
             data = {}
-            data["em"] = em_resp.get("result", {}) if em_resp else previous_data.get("em", {})
-            data["wifi"] = wifi_resp.get("result", {}) if wifi_resp else previous_data.get("wifi", {})
-            data["ble"] = ble_resp.get("result", {}) if ble_resp else previous_data.get("ble", {})
-            data["bat"] = bat_resp.get("result", {}) if bat_resp else previous_data.get("bat", {})
+            data["em"] = get_result_or_previous(em_resp, "em")
+            data["wifi"] = get_result_or_previous(wifi_resp, "wifi")
+            data["ble"] = get_result_or_previous(ble_resp, "ble")
+            data["bat"] = get_result_or_previous(bat_resp, "bat")
 
             # Log results for each endpoint using shared helper
             log_status_result(_LOGGER, self.device_id, "EM.GetStatus", em_resp, data["em"])
