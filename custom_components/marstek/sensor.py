@@ -409,17 +409,21 @@ class MarstekStatusDataUpdateCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         """Fetch EM, WiFi, BLE, and Bat status sequentially and return combined dict."""
-        data = {}
         try:
+            # Get previous data as fallback
+            previous_data = getattr(self, 'data', {})
+            
             em_resp = await self.client.get_em_status(self.device_id)
             wifi_resp = await self.client.get_wifi_status(self.device_id)
             ble_resp = await self.client.get_ble_status(self.device_id)
             bat_resp = await self.client.get_battery_status(self.device_id)
             
-            data["em"] = (em_resp or {}).get("result", {}) if em_resp is not None else getattr(self, 'data', {}).get("em", {})
-            data["wifi"] = (wifi_resp or {}).get("result", {}) if wifi_resp is not None else getattr(self, 'data', {}).get("wifi", {})
-            data["ble"] = (ble_resp or {}).get("result", {}) if ble_resp is not None else getattr(self, 'data', {}).get("ble", {})
-            data["bat"] = (bat_resp or {}).get("result", {}) if bat_resp is not None else getattr(self, 'data', {}).get("bat", {})
+            # Build data dict, using previous data if API call fails
+            data = {}
+            data["em"] = em_resp.get("result", {}) if em_resp else previous_data.get("em", {})
+            data["wifi"] = wifi_resp.get("result", {}) if wifi_resp else previous_data.get("wifi", {})
+            data["ble"] = ble_resp.get("result", {}) if ble_resp else previous_data.get("ble", {})
+            data["bat"] = bat_resp.get("result", {}) if bat_resp else previous_data.get("bat", {})
 
             # Log results for each endpoint using shared helper
             log_status_result(_LOGGER, self.device_id, "EM.GetStatus", em_resp, data["em"])
@@ -431,7 +435,7 @@ class MarstekStatusDataUpdateCoordinator(DataUpdateCoordinator):
             return data
 
         except Exception as exc:
-            _LOGGER.warning("Error fetching combined status data: %s", exc)
+            _LOGGER.warning("Error fetching combined status data: %s", exc, exc_info=True)
             return getattr(self, 'data', {})
 
 class MarstekDeviceInfoSensor(SensorEntity):
