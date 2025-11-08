@@ -338,7 +338,7 @@ async def async_setup_entry(
         
     # Create sensors for battery status (uses fast coordinator)
     for description in BATTERY_STATUS_SENSORS:
-        sensors.append(MarstekBatteryStatusSensor(fast_coordinator, config_entry, description))
+        sensors.append(MarstekBatteryStatusSensor(slow_coordinator, config_entry, description))
         _LOGGER.debug("Created battery status sensor: %s", description.name)
 
     # Create sensors for EM status (uses slow coordinator)
@@ -450,41 +450,10 @@ class MarstekDeviceInfoSensor(SensorEntity):
         """Return the state of the sensor."""
         return self._config_entry.data.get(self.entity_description.key)
 
-class MarstekBatteryStatusSensor(MarstekCoordinatorEntity):
-    """Sensor for Marstek battery status information."""
-    
-    def __init__(self, coordinator: MarstekDataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
-        """Initialize the sensor."""
-        super().__init__(coordinator, config_entry, description, "battery")
-    
-    @property
-    def native_value(self):
-        """Return the state of the sensor."""
-        raw_value = self._get_value_from_section()
-        if raw_value is None:
-            return None
-        
-        sensor_key = self.entity_description.key
-        
-        # Apply conversions based on the field
-        if sensor_key == "bat_temp":
-            return round(float(raw_value) / 10, 1)  # 164.0 / 10 = 16.4°C
-        elif sensor_key == "bat_capacity":
-            return round(float(raw_value) * 10, 1)  # 512.0 * 10 = 5120 Wh
-        elif sensor_key == "rated_capacity":
-            return round(float(raw_value), 1)
-        elif sensor_key == "soc":
-            return int(raw_value)
-        elif sensor_key == "error_code":
-            return str(raw_value)
-        
-        return raw_value
-
-
 class MarstekModeStatusSensor(MarstekCoordinatorEntity):
     """Sensor for Marstek mode status information."""
     
-    def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
+    def __init__(self, coordinator: MarstekDataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry, description, "mode")
     
@@ -519,12 +488,41 @@ class MarstekModeStatusSensor(MarstekCoordinatorEntity):
             return str(raw_value)
 
         return raw_value
-
+    
+class MarstekBatteryStatusSensor(MarstekCoordinatorEntity):
+    """Sensor for Marstek battery status information."""
+    
+    def __init__(self, coordinator: MarstekStatusDataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, config_entry, description, "battery")
+    
+    @property
+    def native_value(self):
+        """Return the state of the sensor."""
+        raw_value = self._get_value_from_section("bat")
+        if raw_value is None:
+            return None
+        
+        sensor_key = self.entity_description.key
+        
+        # Apply conversions based on the field
+        if sensor_key == "bat_temp":
+            return round(float(raw_value) / 10, 1)  # 164.0 / 10 = 16.4°C
+        elif sensor_key == "bat_capacity":
+            return round(float(raw_value) * 10, 1)  # 512.0 * 10 = 5120 Wh
+        elif sensor_key == "rated_capacity":
+            return round(float(raw_value), 1)
+        elif sensor_key == "soc":
+            return int(raw_value)
+        elif sensor_key == "error_code":
+            return str(raw_value)
+        
+        return raw_value
 
 class MarstekEMStatusSensor(MarstekCoordinatorEntity):
     """Sensor for Marstek energy meter status information."""
     
-    def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
+    def __init__(self, coordinator: MarstekStatusDataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry, description, "em")
     
@@ -549,7 +547,7 @@ class MarstekEMStatusSensor(MarstekCoordinatorEntity):
 class MarstekWifiStatusSensor(MarstekCoordinatorEntity):
     """Sensor for Marstek WiFi status information."""
     
-    def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
+    def __init__(self, coordinator: MarstekStatusDataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry, description, "wifi")
     
@@ -574,7 +572,7 @@ class MarstekWifiStatusSensor(MarstekCoordinatorEntity):
 class MarstekBLEStatusSensor(MarstekCoordinatorEntity):
     """Sensor for Marstek BLE status information."""
     
-    def __init__(self, coordinator: DataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
+    def __init__(self, coordinator: MarstekStatusDataUpdateCoordinator, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
         """Initialize the sensor."""
         super().__init__(coordinator, config_entry, description, "ble")
     
