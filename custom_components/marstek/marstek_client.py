@@ -23,6 +23,16 @@ class MarstekUDPClient:
     MAX_PORT_BIND_RETRIES = 5
     RECV_BUFFER_SIZE = 4096
     
+    # Read-only methods that don't require strict ID matching
+    READ_ONLY_METHODS = {
+        "Marstek.GetDevice",
+        "Bat.GetStatus",
+        "EM.GetStatus",
+        "Wifi.GetStatus",
+        "BLE.GetStatus",
+        "ES.GetMode",
+    }
+    
     def __init__(self, device_ip: str, remote_port: int = 30000, local_port: int = 30000,
                  socket_timeout: float = None, total_wait_time: float = None,
                  max_send_attempts: int = None, retry_delay: float = None):
@@ -52,14 +62,21 @@ class MarstekUDPClient:
                     raise e
                 _LOGGER.debug("Port %d busy, trying %d", port_to_try, port_to_try + 1)
     
-    async def _wait_for_response(self, sock: socket.socket, rpc_id: int, start_time: float) -> tuple:
+    async def _wait_for_response(self, sock: socket.socket, rpc_id: int, method: str, start_time: float) -> tuple:
         """
         Wait for and validate UDP response.
+        
+        Args:
+            sock: Socket to receive from
+            rpc_id: Expected RPC ID
+            method: RPC method name (for determining if strict ID matching is needed)
+            start_time: Time when request was sent
         
         Returns:
             tuple: (success: bool, response_obj: dict or None, response_data: bytes)
         """
         response_data = b''
+        is_read_only = method in self.READ_ONLY_METHODS
         
         while (time.time() - start_time) < self.total_wait_time:
             try:
@@ -77,14 +94,24 @@ class MarstekUDPClient:
                     txt = response_data.decode('utf-8')
                     obj = json.loads(txt)
                     
-                    # Validate RPC ID matches
-                    if obj.get("id") != rpc_id:
-                        _LOGGER.warning("Response ID mismatch: expected %d, got %s", rpc_id, obj.get("id"))
-                        continue
-                    
-                    elapsed_ms = (time.time() - start_time) * 1000
-                    _LOGGER.info("RESPONSE (received in %.0fms): %s", elapsed_ms, txt)
-                    return (True, obj, response_data)
+                    # For read-only methods, accept any valid response
+                    if is_read_only:
+                        if obj.get("id") != rpc_id:
+                            _LOGGER.debug("Response ID mismatch for read-only %s: expected %d, got %s (accepting anyway)", 
+                                        method, rpc_id, obj.get("id"))
+                        elapsed_ms = (time.time() - start_time) * 1000
+                        _LOGGER.info("RESPONSE (received in %.0fms): %s", elapsed_ms, txt)
+                        return (True, obj, response_data)
+                    else:
+                        # For write operations, enforce strict ID matching
+                        if obj.get("id") != rpc_id:
+                            _LOGGER.warning("Response ID mismatch for write operation %s: expected %d, got %s (rejecting)", 
+                                          method, rpc_id, obj.get("id"))
+                            continue
+                        elapsed_ms = (time.time() - start_time) * 1000
+                        _LOGGER.info("RESPONSE (received in %.0fms): %s", elapsed_ms, txt)
+                        return (True, obj, response_data)
+                        
                 except (json.JSONDecodeError, UnicodeDecodeError):
                     # Incomplete data, continue receiving
                     continue
@@ -148,7 +175,7 @@ class MarstekUDPClient:
                 
                 # Wait for the complete response
                 start_time = time.time()
-                success, response_obj, response_data = await self._wait_for_response(sock, rpc_id, start_time)
+                success, response_obj, response_data = await self._wait_for_response(sock, rpc_id, method, start_time)
                 
                 if success:
                     return response_obj

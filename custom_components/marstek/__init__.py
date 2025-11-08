@@ -17,8 +17,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     remote_port = entry.data.get("remote_port", 30000)
     local_port = entry.data.get("local_port", 30000)
 
-    # Create client (no need to call API again, we have data from config_flow)
-    client = MarstekUDPClient(device_ip, remote_port, local_port)
+    # Create client with increased timeout for slower device responses
+    client = MarstekUDPClient(device_ip, remote_port, local_port, total_wait_time=1.0)
     
     # Use device information already gathered during config_flow
     rpc_id = entry.data.get("device_id")

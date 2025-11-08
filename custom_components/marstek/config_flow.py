@@ -69,7 +69,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_response = None
         try:
             # Create MarstekUDPClient instance
-            client = MarstekUDPClient(device_ip, remote_port, local_port)
+            # Create UDP client with increased timeout for slower device responses
+            client = MarstekUDPClient(device_ip, remote_port, local_port, total_wait_time=1.0)
 
             # Test connection with retries
             device_response = await self._test_connection_with_retries(client, max_retries=3)
