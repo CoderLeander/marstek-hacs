@@ -180,20 +180,23 @@ class MarstekUDPClient:
                 if success:
                     return response_obj
                 
-                # Log timeout details
+                # Log timeout details - use debug for retries, warning only on final failure
                 elapsed_ms = (time.time() - start_time) * 1000
+                is_final_attempt = (send_attempt == self.max_send_attempts)
+                log_level = _LOGGER.warning if is_final_attempt else _LOGGER.debug
+                
                 if response_data:
-                    _LOGGER.warning("Incomplete response after %.0fms (attempt %d/%d): %s", 
-                                  elapsed_ms, send_attempt, self.max_send_attempts, response_data)
+                    log_level("Incomplete response after %.0fms (attempt %d/%d): %s", 
+                             elapsed_ms, send_attempt, self.max_send_attempts, response_data)
                 else:
-                    _LOGGER.warning("No response after %.0fms (attempt %d/%d)", 
-                                  elapsed_ms, send_attempt, self.max_send_attempts)
+                    log_level("No response after %.0fms (attempt %d/%d)", 
+                             elapsed_ms, send_attempt, self.max_send_attempts)
                 
                 # Retry if we haven't exhausted attempts
                 if send_attempt < self.max_send_attempts:
                     await asyncio.sleep(self.retry_delay)
                 
-            _LOGGER.error("No valid response after %d attempts", self.max_send_attempts)
+            _LOGGER.warning("No valid response after %d attempts", self.max_send_attempts)
             return None
             
         except Exception as e:
