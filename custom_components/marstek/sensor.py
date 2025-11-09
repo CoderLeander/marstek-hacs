@@ -12,7 +12,7 @@ from .const import DOMAIN
 
 # Two intervals: fast updates (ES.GetMode) and slow updates (EM, WiFi, BLE, Bat)
 FAST_SCAN_INTERVAL = timedelta(seconds=10)       # 10 seconds for mode/battery
-SLOW_SCAN_INTERVAL = timedelta(seconds=600)      # 10 minutes for other status
+SLOW_SCAN_INTERVAL = timedelta(seconds=3600)      # 20 minutes for other status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -232,7 +232,6 @@ WIFI_STATUS_SENSORS = [
     ),
 ]
 
-
 # Define sensor descriptions for BLE status (from BLE.GetStatus response)
 BLE_STATUS_SENSORS = [
     SensorEntityDescription(
@@ -263,7 +262,6 @@ def log_status_result(logger, device_id, endpoint: str, resp, data_section):
     else:
         logger.info(f"Marstek: {endpoint} returned no response for device %s", device_id)
 
-
 def _create_device_info(config_entry: ConfigEntry) -> DeviceInfo:
     """Create device info from config entry data."""
     ble_mac = config_entry.data.get("ble_mac")
@@ -279,7 +277,6 @@ def _create_device_info(config_entry: ConfigEntry) -> DeviceInfo:
         name=f"{device_name} ({wifi_name})" if wifi_name else device_name,
         sw_version=str(config_entry.data.get("device_version")) if config_entry.data.get("device_version") else None,
     )
-
 
 class MarstekCoordinatorEntity(CoordinatorEntity, SensorEntity):
     """Base class for Marstek sensors using a coordinator."""
@@ -310,7 +307,6 @@ class MarstekCoordinatorEntity(CoordinatorEntity, SensorEntity):
         
         # Otherwise get directly from root
         return self.coordinator.data.get(self.entity_description.key)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -608,7 +604,6 @@ class MarstekEMStatusSensor(MarstekCoordinatorEntity):
         
         return raw_value
 
-
 class MarstekWifiStatusSensor(MarstekCoordinatorEntity):
     """Sensor for Marstek WiFi status information."""
     
@@ -632,7 +627,6 @@ class MarstekWifiStatusSensor(MarstekCoordinatorEntity):
             return str(raw_value)
         
         return raw_value
-
 
 class MarstekBLEStatusSensor(MarstekCoordinatorEntity):
     """Sensor for Marstek BLE status information."""
