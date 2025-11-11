@@ -12,7 +12,7 @@ from .const import DOMAIN
 
 # Two intervals: fast updates (ES.GetMode) and slow updates (EM, WiFi, BLE, Bat)
 FAST_SCAN_INTERVAL = timedelta(seconds=10)       # 10 seconds for mode/battery
-SLOW_SCAN_INTERVAL = timedelta(seconds=3600)      # 20 minutes for other status
+SLOW_SCAN_INTERVAL = timedelta(seconds=3600)      # 60 minutes for other status
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -145,6 +145,14 @@ MODE_STATUS_SENSORS = [
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:battery-minus",
+    ),
+    SensorEntityDescription(
+        key="battery_net_power",
+        name="Battery Net Power",
+        native_unit_of_measurement="W",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:battery-arrow-up-down",
     ),
 ]
 
@@ -531,6 +539,14 @@ class MarstekModeStatusSensor(MarstekCoordinatorEntity):
             # Positive ongrid_power means discharging
             power_value = int(ongrid_power)
             return power_value if power_value > 0 else 0
+        elif sensor_key == "battery_net_power":
+            if self.coordinator.data is None:
+                return None
+            ongrid_power = self.coordinator.data.get("ongrid_power")
+            if ongrid_power is None:
+                return None
+            # Invert ongrid_power: positive when charging, negative when discharging
+            return -int(ongrid_power)
         else:
             raw_value = self._get_value_from_section()
             _LOGGER.debug("Mode sensor %s: raw_value=%s from coordinator data keys=%s", 
