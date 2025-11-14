@@ -1,3 +1,11 @@
+def get_result_or_previous(resp, section_key, previous_data):
+    """Extract result from response or use previous data for the section."""
+    if resp and "error" in resp:
+        _LOGGER.warning(f"{section_key} returned error: %s, keeping previous data", resp.get("error"))
+        return previous_data.get(section_key, {})
+    if resp and "result" in resp:
+        return resp.get("result", {})
+    return previous_data.get(section_key, {})
 """Sensor platform for Marstek integration."""
 import logging
 from datetime import timedelta
@@ -361,9 +369,9 @@ async def async_setup_entry(
         sensors.append(MarstekBatteryStatusSensor(slow_coordinator, config_entry, description))
         _LOGGER.debug("Created battery status sensor: %s", description.name)
 
-    # Create sensors for EM status (uses slow coordinator)
+    # Create sensors for EM status (uses fast coordinator now)
     for description in EM_STATUS_SENSORS:
-        sensors.append(MarstekEMStatusSensor(slow_coordinator, config_entry, description))
+        sensors.append(MarstekEMStatusSensor(fast_coordinator, config_entry, description))
         _LOGGER.debug("Created EM status sensor: %s", description.name)
 
     # Create sensors for WiFi status (uses slow coordinator)
@@ -381,7 +389,7 @@ async def async_setup_entry(
                  len(sensors), len(DEVICE_INFO_SENSORS), len(BATTERY_STATUS_SENSORS), len(MODE_STATUS_SENSORS), len(EM_STATUS_SENSORS), len(WIFI_STATUS_SENSORS), len(BLE_STATUS_SENSORS))
 
 class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
-    """Class to manage fetching Marstek battery data."""
+    """Coordinator that fetches Mode and EM in one update."""
 
     def __init__(self, hass: HomeAssistant, client, device_id: int):
         """Initialize."""
@@ -396,40 +404,36 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_update_data(self):
-        """Update data via ES.GetMode only."""
+        """Fetch ES.GetMode and EM.GetStatus."""
         try:
-            mode_data = await self.client.get_mode_status(self.device_id)
-            
-            # Check if we got an error response
-            if mode_data and "error" in mode_data:
-                _LOGGER.warning("ES.GetMode returned error: %s", mode_data.get("error"))
-                # Return previous data to keep sensors at their last known values
-                return getattr(self, 'data', {})
-            
-            # Extract result
-            result = mode_data.get("result", {}) if mode_data is not None else {}
+            previous_data = getattr(self, 'data', {})
 
-            _LOGGER.debug("Mode status data: %s", result)
-            log_status_result(_LOGGER, self.device_id, "ES.GetMode", mode_data, result)
+            # Send API requests sequentially
+            mode_resp = await self.client.get_mode_status(self.device_id)
+            em_resp = await self.client.get_em_status(self.device_id)
 
-            # If we got empty result, keep previous data
-            if not result and mode_data is not None:
-                _LOGGER.warning("ES.GetMode returned empty result, keeping previous data")
-                return getattr(self, 'data', {})
+            # Build data dict, using previous data if API call fails or returns error
+            mode_result = get_result_or_previous(mode_resp, "mode", previous_data)
+            em_result = get_result_or_previous(em_resp, "em", previous_data)
             
-            if mode_data is None:
-                # Return previous data if available, or empty dict for first attempt
-                return getattr(self, 'data', {})
+            # Compose combined data with 'mode' key for consistency
+            data = {}
+            data["mode"] = mode_result
+            data["em"] = em_result
             
-            return result
+            # Log results for each endpoint using shared helper
+            log_status_result(_LOGGER, self.device_id, "ES.GetMode", mode_resp, mode_result)
+            log_status_result(_LOGGER, self.device_id, "EM.GetStatus", em_resp, em_result)
+
+            _LOGGER.debug("Fast coordinator combined data: %s", data)
+            return data
 
         except Exception as exception:
-            _LOGGER.warning("Error communicating with mode API: %s", exception)
-            # Return previous data if available, or empty dict for first attempt  
+            _LOGGER.warning("Error communicating with fast API: %s", exception)
             return getattr(self, 'data', {})
 
 class MarstekStatusDataUpdateCoordinator(DataUpdateCoordinator):
-    """Coordinator that fetches mode, EM, WiFi and BLE in one update."""
+    """Coordinator that fetches WiFi, BLE and Bat in one update."""
 
     def __init__(self, hass: HomeAssistant, client, device_id: int):
         self.client = client
@@ -442,37 +446,23 @@ class MarstekStatusDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_update_data(self):
-        """Fetch EM, WiFi, BLE, and Bat status sequentially and return combined dict."""
+        """Fetch WiFi, BLE and Bat status sequentially and return combined dict."""
         try:
             # Get previous data as fallback
             previous_data = getattr(self, 'data', {})
             
-            em_resp = await self.client.get_em_status(self.device_id)
+            # Send API requests sequentially
             wifi_resp = await self.client.get_wifi_status(self.device_id)
             ble_resp = await self.client.get_ble_status(self.device_id)
             bat_resp = await self.client.get_battery_status(self.device_id)
             
-            # Helper function to extract result or use previous data
-            def get_result_or_previous(resp, section_key):
-                # If response has error, use previous data
-                if resp and "error" in resp:
-                    _LOGGER.warning("%s returned error: %s, keeping previous data", section_key, resp.get("error"))
-                    return previous_data.get(section_key, {})
-                # If response has result, use it
-                if resp and "result" in resp:
-                    return resp.get("result", {})
-                # Otherwise use previous data
-                return previous_data.get(section_key, {})
-            
             # Build data dict, using previous data if API call fails or returns error
             data = {}
-            data["em"] = get_result_or_previous(em_resp, "em")
-            data["wifi"] = get_result_or_previous(wifi_resp, "wifi")
-            data["ble"] = get_result_or_previous(ble_resp, "ble")
-            data["bat"] = get_result_or_previous(bat_resp, "bat")
+            data["wifi"] = get_result_or_previous(wifi_resp, "wifi", previous_data)
+            data["ble"] = get_result_or_previous(ble_resp, "ble", previous_data)
+            data["bat"] = get_result_or_previous(bat_resp, "bat", previous_data)
 
             # Log results for each endpoint using shared helper
-            log_status_result(_LOGGER, self.device_id, "EM.GetStatus", em_resp, data["em"])
             log_status_result(_LOGGER, self.device_id, "Wifi.GetStatus", wifi_resp, data["wifi"])
             log_status_result(_LOGGER, self.device_id, "BLE.GetStatus", ble_resp, data["ble"])
             log_status_result(_LOGGER, self.device_id, "Bat.GetStatus", bat_resp, data["bat"])
@@ -511,46 +501,38 @@ class MarstekModeStatusSensor(MarstekCoordinatorEntity):
     def native_value(self):
         """Return the state of the sensor."""
         sensor_key = self.entity_description.key
-        
-        # Special case: bat_soc_mode reads from bat_soc field
+        mode_data = None
+        if self.coordinator.data is not None:
+            mode_data = self.coordinator.data.get("mode", {})
+        if mode_data is None:
+            _LOGGER.warning("Mode sensor %s: mode_data is None", sensor_key)
+            return None
+
+        # Special case: bat_soc_mode reads from bat_soc field in mode_data
         if sensor_key == "bat_soc_mode":
-            if self.coordinator.data is None:
-                _LOGGER.warning("Mode sensor bat_soc_mode: coordinator data is None")
-                return None
-            raw_value = self.coordinator.data.get("bat_soc")
-            _LOGGER.debug("Mode sensor bat_soc_mode: raw_value=%s from coordinator data keys=%s", 
-                         raw_value, list(self.coordinator.data.keys()))
-        # Calculated sensors based on ongrid_power
+            raw_value = mode_data.get("bat_soc")
+            _LOGGER.debug("Mode sensor bat_soc_mode: raw_value=%s from mode_data keys=%s", raw_value, list(mode_data.keys()))
+        # Calculated sensors based on ongrid_power in mode_data
         elif sensor_key == "charging_power":
-            if self.coordinator.data is None:
-                return None
-            ongrid_power = self.coordinator.data.get("ongrid_power")
+            ongrid_power = mode_data.get("ongrid_power")
             if ongrid_power is None:
                 return None
-            # Negative ongrid_power means charging, return as positive value
             power_value = int(ongrid_power)
             return abs(power_value) if power_value < 0 else 0
         elif sensor_key == "discharging_power":
-            if self.coordinator.data is None:
-                return None
-            ongrid_power = self.coordinator.data.get("ongrid_power")
+            ongrid_power = mode_data.get("ongrid_power")
             if ongrid_power is None:
                 return None
-            # Positive ongrid_power means discharging
             power_value = int(ongrid_power)
             return power_value if power_value > 0 else 0
         elif sensor_key == "battery_net_power":
-            if self.coordinator.data is None:
-                return None
-            ongrid_power = self.coordinator.data.get("ongrid_power")
+            ongrid_power = mode_data.get("ongrid_power")
             if ongrid_power is None:
                 return None
-            # Invert ongrid_power: positive when charging, negative when discharging
             return -int(ongrid_power)
         else:
-            raw_value = self._get_value_from_section()
-            _LOGGER.debug("Mode sensor %s: raw_value=%s from coordinator data keys=%s", 
-                         sensor_key, raw_value, list(self.coordinator.data.keys()) if self.coordinator.data else None)
+            raw_value = mode_data.get(sensor_key)
+            _LOGGER.debug("Mode sensor %s: raw_value=%s from mode_data keys=%s", sensor_key, raw_value, list(mode_data.keys()))
 
         if raw_value is None:
             _LOGGER.warning("Mode sensor %s: raw_value is None after lookup", sensor_key)
