@@ -1,11 +1,4 @@
-def get_result_or_previous(resp, section_key, previous_data):
-    """Extract result from response or use previous data for the section."""
-    if resp and "error" in resp:
-        _LOGGER.warning(f"{section_key} returned error: %s, keeping previous data", resp.get("error"))
-        return previous_data.get(section_key, {})
-    if resp and "result" in resp:
-        return resp.get("result", {})
-    return previous_data.get(section_key, {})
+
 """Sensor platform for Marstek integration."""
 import logging
 from datetime import timedelta
@@ -18,7 +11,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .const import DOMAIN
 
-# Two intervals: fast updates (ES.GetMode) and slow updates (EM, WiFi, BLE, Bat)
+# Two intervals: fast updates (ES, EM) and slow updates (WiFi, BLE, Bat)
 FAST_SCAN_INTERVAL = timedelta(seconds=10)       # 10 seconds for mode/battery
 SLOW_SCAN_INTERVAL = timedelta(seconds=3600)      # 60 minutes for other status
 
@@ -265,6 +258,16 @@ BLE_STATUS_SENSORS = [
 ]
 
 # Shared logging helper for endpoint results
+
+def get_result_or_previous(resp, section_key, previous_data):
+    """Extract result from response or use previous data for the section."""
+    if resp and "error" in resp:
+        _LOGGER.warning(f"{section_key} returned error: %s, keeping previous data", resp.get("error"))
+        return previous_data.get(section_key, {})
+    if resp and "result" in resp:
+        return resp.get("result", {})
+    return previous_data.get(section_key, {})
+
 def log_status_result(logger, device_id, endpoint: str, resp, data_section):
     if resp is not None:
         try:
