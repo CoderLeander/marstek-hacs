@@ -197,6 +197,23 @@ EM_STATUS_SENSORS = [
         state_class=SensorStateClass.MEASUREMENT,
         icon="mdi:flash",
     ),
+    # Virtual sensors
+    SensorEntityDescription(
+        key="grid_consumption",
+        name="Grid Consumption",
+        native_unit_of_measurement="W",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower-import",
+    ),
+    SensorEntityDescription(
+        key="return_to_grid",
+        name="Return to Grid",
+        native_unit_of_measurement="W",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        icon="mdi:transmission-tower-export",
+    ),
 ]
 
 # Define sensor descriptions for WiFi status (from Wifi.GetStatus response)
@@ -591,19 +608,34 @@ class MarstekEMStatusSensor(MarstekCoordinatorEntity):
     @property
     def native_value(self):
         """Return the state of the sensor."""
-        raw_value = self._get_value_from_section("em")
-        if raw_value is None:
-            return None
-        
         sensor_key = self.entity_description.key
-        
-        # Apply conversions
+        em_data = None
+        if self.coordinator.data is not None:
+            em_data = self.coordinator.data.get("em", {})
+        if em_data is None:
+            return None
+
         if sensor_key in ["a_power", "b_power", "c_power", "total_power"]:
-            return int(raw_value)
+            raw_value = em_data.get(sensor_key)
+            return int(raw_value) if raw_value is not None else None
         elif sensor_key == "ct_state":
-            return int(raw_value)
-        
-        return raw_value
+            raw_value = em_data.get(sensor_key)
+            return int(raw_value) if raw_value is not None else None
+        elif sensor_key == "grid_consumption":
+            a = em_data.get("a_power", 0)
+            b = em_data.get("b_power", 0)
+            c = em_data.get("c_power", 0)
+            total = int(a) + int(b) + int(c)
+            return total if total > 0 else 0
+        elif sensor_key == "return_to_grid":
+            a = em_data.get("a_power", 0)
+            b = em_data.get("b_power", 0)
+            c = em_data.get("c_power", 0)
+            total = int(a) + int(b) + int(c)
+            return abs(total) if total < 0 else 0
+        else:
+            raw_value = em_data.get(sensor_key)
+            return raw_value
 
 class MarstekWifiStatusSensor(MarstekCoordinatorEntity):
     """Sensor for Marstek WiFi status information."""
