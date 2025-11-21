@@ -9,8 +9,7 @@ from typing import Optional
 
 _LOGGER = logging.getLogger(__name__)
 
-class MarstekUDPClient:
-    """UDP client for Marstek device communication via RPC commands."""
+class MarstekUDPClient:   
     
     # Timing constants
     DEFAULT_SOCKET_TIMEOUT = 0.01  # 10ms quick check for incoming data
@@ -32,6 +31,12 @@ class MarstekUDPClient:
         "BLE.GetStatus",
         "ES.GetMode",
     }
+
+    def get_no_response_count(self) -> int:
+        """
+        Get the current count of no-response events.
+        """
+        return self.no_response_counter
     
     def __init__(self, device_ip: str, remote_port: int = 30000, local_port: int = 30000,
                  socket_timeout: float = None, total_wait_time: float = None,
