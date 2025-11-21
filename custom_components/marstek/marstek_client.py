@@ -41,6 +41,9 @@ class MarstekUDPClient:
         self.local_port = local_port
         self._last_request_time = 0
         self._min_request_interval = self.DEFAULT_MIN_REQUEST_INTERVAL
+
+        # Counter for no response events
+        self.no_response_counter = 0
         
         # Allow customization of timing parameters
         self.socket_timeout = socket_timeout or self.DEFAULT_SOCKET_TIMEOUT
@@ -197,6 +200,7 @@ class MarstekUDPClient:
                     await asyncio.sleep(self.retry_delay)
                 
             _LOGGER.warning("No valid response after %d attempts", self.max_send_attempts)
+            self.no_response_counter += 1
             return None
             
         except Exception as e:

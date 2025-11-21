@@ -1,4 +1,3 @@
-
 """Sensor platform for Marstek integration."""
 import logging
 from datetime import timedelta
@@ -16,6 +15,14 @@ FAST_SCAN_INTERVAL = timedelta(seconds=30)       # 15 seconds for mode/battery
 SLOW_SCAN_INTERVAL = timedelta(seconds=3600)      # 60 minutes for other status
 
 _LOGGER = logging.getLogger(__name__)
+
+# Diagnostic sensor for no response counter
+NO_RESPONSE_SENSOR_DESCRIPTION = SensorEntityDescription(
+    key="no_response_counter",
+    name="No Response Counter",
+    icon="mdi:alert",
+    entity_category=EntityCategory.DIAGNOSTIC,
+)
 
 # Define sensor descriptions for device information
 DEVICE_INFO_SENSORS = [
@@ -314,6 +321,19 @@ def _create_device_info(config_entry: ConfigEntry) -> DeviceInfo:
         sw_version=str(config_entry.data.get("device_version")) if config_entry.data.get("device_version") else None,
     )
 
+class MarstekNoResponseCounterSensor(SensorEntity):
+    """Sensor for Marstek no response counter."""
+    def __init__(self, client, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
+        self.entity_description = description
+        self._client = client
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{config_entry.entry_id}_no_response_counter"
+        self._attr_device_info = _create_device_info(config_entry)
+
+    @property
+    def native_value(self):
+        return self._client.get_no_response_count()
+
 class MarstekCoordinatorEntity(CoordinatorEntity, SensorEntity):
     """Base class for Marstek sensors using a coordinator."""
     
@@ -404,6 +424,8 @@ async def async_setup_entry(
         sensors.append(MarstekBLEStatusSensor(slow_coordinator, config_entry, description))
         _LOGGER.debug("Created BLE status sensor: %s", description.name)
     
+    # Add the no response counter sensor
+    sensors.append(MarstekNoResponseCounterSensor(client, config_entry, NO_RESPONSE_SENSOR_DESCRIPTION))
     async_add_entities(sensors, True)
     _LOGGER.info("Added %d Marstek sensors (%d device info + %d battery + %d mode + %d EM + %d WiFi + %d BLE)", 
                  len(sensors), len(DEVICE_INFO_SENSORS), len(BATTERY_STATUS_SENSORS), len(MODE_STATUS_SENSORS), len(EM_STATUS_SENSORS), len(WIFI_STATUS_SENSORS), len(BLE_STATUS_SENSORS))
