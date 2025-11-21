@@ -17,7 +17,7 @@ class MarstekUDPClient:
     DEFAULT_TOTAL_WAIT_TIME = 1.0  # 1000ms total wait per attempt
     DEFAULT_MAX_SEND_ATTEMPTS = 1  # Maximum number of send attempts
     DEFAULT_RETRY_DELAY = 1.0  # 1000ms delay between retry attempts
-    DEFAULT_MIN_REQUEST_INTERVAL = 10  # Minimum 15 seconds between requests
+    DEFAULT_MIN_REQUEST_INTERVAL = 15  # Minimum 15 seconds between requests
     
     # Socket constants
     MAX_PORT_BIND_RETRIES = 5
