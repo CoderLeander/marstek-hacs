@@ -34,9 +34,13 @@ class MarstekUDPClient:
 
     def get_no_response_count(self) -> int:
         """
-        Get the current count of no-response events.
+        Get the current count of no-response events as an integer.
         """
-        return self.no_response_counter
+        value = getattr(self, 'no_response_counter', 0)
+        try:
+            return int(value)
+        except Exception:
+            return 0
     
     def __init__(self, device_ip: str, remote_port: int = 30000, local_port: int = 30000,
                  socket_timeout: float = None, total_wait_time: float = None,
