@@ -13,7 +13,7 @@ class MarstekUDPClient:
     
     # Timing constants
     DEFAULT_SOCKET_TIMEOUT = 0.01  # 10ms quick check for incoming data
-    DEFAULT_TOTAL_WAIT_TIME = 1.0  # 1000ms total wait per attempt
+    DEFAULT_TOTAL_WAIT_TIME = 3.0  # 1000ms total wait per attempt
     DEFAULT_MAX_SEND_ATTEMPTS = 1  # Maximum number of send attempts
     DEFAULT_RETRY_DELAY = 1.0  # 1000ms delay between retry attempts
     DEFAULT_MIN_REQUEST_INTERVAL = 15  # Minimum 15 seconds between requests
