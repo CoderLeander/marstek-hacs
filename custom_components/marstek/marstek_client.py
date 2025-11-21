@@ -12,7 +12,7 @@ _LOGGER = logging.getLogger(__name__)
 class MarstekUDPClient:   
     
     # Timing constants
-    DEFAULT_SOCKET_TIMEOUT = 0.01  # 10ms quick check for incoming data
+    DEFAULT_SOCKET_TIMEOUT = 0.10  # 100ms quick check for incoming data
     DEFAULT_TOTAL_WAIT_TIME = 3.0  # 1000ms total wait per attempt
     DEFAULT_MAX_SEND_ATTEMPTS = 1  # Maximum number of send attempts
     DEFAULT_RETRY_DELAY = 1.0  # 1000ms delay between retry attempts
