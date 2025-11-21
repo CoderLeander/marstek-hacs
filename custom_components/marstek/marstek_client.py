@@ -172,7 +172,8 @@ class MarstekUDPClient:
             sock.settimeout(self.socket_timeout)
 
             for send_attempt in range(1, self.max_send_attempts + 1):
-                rpc_id = random.randint(1000, 65000)
+                #rpc_id = random.randint(1000, 65000)
+                rpc_id = 0
                 req = {
                     "id": rpc_id,
                     "method": method,
