@@ -11,7 +11,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import DOMAIN
 
 # Two intervals: fast updates (ES, EM) and slow updates (WiFi, BLE, Bat)
-FAST_SCAN_INTERVAL = timedelta(seconds=30)       # 15 seconds for mode/battery
+FAST_SCAN_INTERVAL = timedelta(seconds=60)       # 60 seconds for mode/battery
 SLOW_SCAN_INTERVAL = timedelta(seconds=3600)      # 60 minutes for other status
 
 _LOGGER = logging.getLogger(__name__)
