@@ -21,6 +21,7 @@ NO_RESPONSE_SENSOR_DESCRIPTION = SensorEntityDescription(
     key="no_response_counter",
     name="No Response Counter",
     icon="mdi:alert",
+    entity_category=EntityCategory.DIAGNOSTIC,
     state_class=SensorStateClass.MEASUREMENT,
 )
 
