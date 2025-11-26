@@ -33,10 +33,10 @@ class MarstekManualPowerNumber(NumberEntity):
     """Representation of Marstek Manual Mode Power Control."""
 
     _attr_icon = "mdi:lightning-bolt"
-    _attr_native_min_value = 0
-    _attr_native_max_value = 100
-    _attr_native_step = 1
-    _attr_native_unit_of_measurement = "%"
+    _attr_native_min_value = -1000
+    _attr_native_max_value = 1000
+    _attr_native_step = 100
+    _attr_native_unit_of_measurement = "W"
     _attr_mode = NumberMode.SLIDER
 
     def __init__(self, client, rpc_id, entry, hass):
@@ -54,7 +54,7 @@ class MarstekManualPowerNumber(NumberEntity):
         
         self._attr_name = f"{device_name} Manual Power"
         self._attr_unique_id = f"{ble_mac or wifi_mac or device_ip}_manual_power"
-        self._attr_native_value = 100  # Default to 100%
+        self._attr_native_value = 0  # Default to 0W
         self._current_mode = None
         
         # Set up device info for grouping
@@ -74,7 +74,7 @@ class MarstekManualPowerNumber(NumberEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Update the power setting for manual mode."""
         power_value = int(value)
-        _LOGGER.info("Setting manual mode power to %d%% for device %s", power_value, self._rpc_id)
+        _LOGGER.info("Setting manual mode power to %dW for device %s", power_value, self._rpc_id)
         
         try:
             # Always use time slot 1 with default schedule (all week, 08:30-20:30)
@@ -90,11 +90,11 @@ class MarstekManualPowerNumber(NumberEntity):
             if response:
                 self._attr_native_value = power_value
                 self.async_write_ha_state()
-                _LOGGER.info("Manual power set to %d%% successfully", power_value)
+                _LOGGER.info("Manual power set to %dW successfully", power_value)
             else:
-                _LOGGER.error("Failed to set manual power to %d%%", power_value)
+                _LOGGER.error("Failed to set manual power to %dW", power_value)
         except Exception as exc:
-            _LOGGER.error("Error setting manual power to %d%%: %s", power_value, exc)
+            _LOGGER.error("Error setting manual power to %dW: %s", power_value, exc)
 
     async def async_update(self) -> None:
         """Fetch the current mode and power from the device."""
