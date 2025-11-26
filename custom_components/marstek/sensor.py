@@ -643,7 +643,9 @@ class MarstekEMStatusSensor(MarstekCoordinatorEntity):
             return int(raw_value) if raw_value is not None else None
         elif sensor_key == "ct_state":
             raw_value = em_data.get(sensor_key)
-            return int(raw_value) if raw_value is not None else None
+            if raw_value is None:
+                return None
+            return "Connected" if int(raw_value) == 1 else "Disconnected"
         elif sensor_key == "grid_consumption":
             a = em_data.get("a_power", 0)
             b = em_data.get("b_power", 0)
