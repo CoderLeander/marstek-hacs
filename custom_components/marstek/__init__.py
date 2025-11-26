@@ -130,23 +130,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Store integration data before forwarding to platforms
     hass.data[DOMAIN][entry.entry_id] = {"client": client, "rpc_id": rpc_id, "devices": devices}
 
-    # Validate that we have all required data before forwarding to sensor platform
+    # Validate that we have all required data before forwarding to platforms
     try:
-        # Forward setup to sensor platform
-        await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
+        # Forward setup to sensor and select platforms
+        await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "select"])
     except Exception as exc:
-        _LOGGER.exception("Failed to set up sensor platform: %s", exc)
+        _LOGGER.exception("Failed to set up platforms: %s", exc)
         # Clean up on failure
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        raise ConfigEntryNotReady(f"Failed to set up sensor platform: {exc}")
+        raise ConfigEntryNotReady(f"Failed to set up platforms: {exc}")
 
     _LOGGER.info("Setup complete - discovered %d devices (rpc id: %s)", len(devices), rpc_id)
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload entry."""
-    # Unload sensor platform
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["sensor"])
+    # Unload sensor and select platforms
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["sensor", "select"])
     
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
