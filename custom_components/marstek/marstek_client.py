@@ -318,3 +318,38 @@ class MarstekUDPClient:
             }
         }
         return await self._send_rpc_request("ES.SetMode", params)
+    
+    async def set_manual_mode(self, device_id: int, time_num: int = 1, 
+                             start_time: str = "08:30", end_time: str = "20:30",
+                             week_set: int = 127, power: int = 100, 
+                             enable: int = 1) -> Optional[dict]:
+        """
+        Set device to Manual mode with time-based scheduling.
+        
+        Args:
+            device_id: Device ID
+            time_num: Time slot number (default: 1)
+            start_time: Start time in HH:MM format (default: "08:30")
+            end_time: End time in HH:MM format (default: "20:30")
+            week_set: Week days bitmap, 127 = all days (default: 127)
+            power: Power percentage 0-100 (default: 100)
+            enable: Enable flag, 1=enabled, 0=disabled (default: 1)
+            
+        Returns:
+            Response dictionary if successful, None otherwise
+        """
+        params = {
+            "id": device_id,
+            "config": {
+                "mode": "Manual",
+                "manual_cfg": {
+                    "time_num": time_num,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "week_set": week_set,
+                    "power": power,
+                    "enable": enable
+                }
+            }
+        }
+        return await self._send_rpc_request("ES.SetMode", params)
