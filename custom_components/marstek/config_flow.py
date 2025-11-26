@@ -16,6 +16,7 @@ STEP_USER_DATA_SCHEMA = vol.Schema({
     vol.Required("device_ip"): cv.string,
     vol.Optional("remote_port", default=30000): cv.port,
     vol.Optional("local_port", default=30000): cv.port,
+    vol.Optional("startup_mode", default="none"): vol.In(["none", "auto", "manual"]),
 })
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -59,6 +60,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         device_ip = user_input["device_ip"]
         remote_port = user_input.get("remote_port", 30000)
         local_port = user_input.get("local_port", 30000)
+        startup_mode = user_input.get("startup_mode", "none")
 
         # Check if this device is already configured
         await self.async_set_unique_id(device_ip)
@@ -112,6 +114,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             "wifi_mac": wifi_mac,
             "wifi_name": wifi_name,
             "device_reported_ip": device_reported_ip,
+            "startup_mode": startup_mode,
         }
 
         _LOGGER.info("Successfully configured Marstek device at %s:%s", device_ip, remote_port)

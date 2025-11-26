@@ -26,16 +26,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.error("No device ID found in entry data - config flow may have failed")
         raise ConfigEntryNotReady("Device ID not found in config entry data")
     
-    # Send Manual Mode command on startup (hardcoded for testing)
-    try:
-        _LOGGER.info("Sending Manual Mode command on startup")
-        manual_mode_response = await client.set_manual_mode(rpc_id)
-        if manual_mode_response:
-            _LOGGER.info("Manual Mode set successfully: %s", manual_mode_response)
-        else:
-            _LOGGER.warning("Failed to set Manual Mode on startup")
-    except Exception as exc:
-        _LOGGER.warning("Error setting Manual Mode on startup: %s", exc)
+    # Send startup mode command based on user configuration
+    startup_mode = entry.data.get("startup_mode", "none")
+    if startup_mode == "auto":
+        try:
+            _LOGGER.info("Sending Auto Mode command on startup")
+            auto_mode_response = await client.set_auto_mode(rpc_id)
+            if auto_mode_response:
+                _LOGGER.info("Auto Mode set successfully: %s", auto_mode_response)
+            else:
+                _LOGGER.warning("Failed to set Auto Mode on startup")
+        except Exception as exc:
+            _LOGGER.warning("Error setting Auto Mode on startup: %s", exc)
+    elif startup_mode == "manual":
+        try:
+            _LOGGER.info("Sending Manual Mode command on startup")
+            manual_mode_response = await client.set_manual_mode(rpc_id)
+            if manual_mode_response:
+                _LOGGER.info("Manual Mode set successfully: %s", manual_mode_response)
+            else:
+                _LOGGER.warning("Failed to set Manual Mode on startup")
+        except Exception as exc:
+            _LOGGER.warning("Error setting Manual Mode on startup: %s", exc)
+    else:
+        _LOGGER.info("Startup mode set to 'none' - skipping mode configuration")
 
     # Build device info from stored config entry data
     payload = {
