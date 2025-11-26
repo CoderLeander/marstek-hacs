@@ -297,3 +297,24 @@ class MarstekUDPClient:
         """
         params = {"id": device_id}
         return await self._send_rpc_request("BLE.GetStatus", params)
+    
+    async def set_auto_mode(self, device_id: int) -> Optional[dict]:
+        """
+        Set device to Auto mode on startup.
+        
+        Args:
+            device_id: Device ID
+            
+        Returns:
+            Response dictionary if successful, None otherwise
+        """
+        params = {
+            "id": device_id,
+            "config": {
+                "mode": "Auto",
+                "auto_cfg": {
+                    "enable": 1
+                }
+            }
+        }
+        return await self._send_rpc_request("ES.SetMode", params)
