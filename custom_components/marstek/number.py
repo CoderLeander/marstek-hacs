@@ -52,7 +52,7 @@ class MarstekManualPowerNumber(NumberEntity):
         device_name = entry.data.get("device_name", "Marstek Device")
         wifi_name = entry.data.get("wifi_name")
         
-        self._attr_name = f"{device_name} Manual Power"
+        self._attr_name = f"Manual Power"
         self._attr_unique_id = f"{ble_mac or wifi_mac or device_ip}_manual_power"
         self._attr_native_value = 0  # Default to 0W
         self._current_mode = None

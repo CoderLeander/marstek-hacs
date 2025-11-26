@@ -46,7 +46,7 @@ class MarstekModeSelect(SelectEntity):
         ble_mac = device_info.get("ble_mac") or device_info.get("mac")
         device_name = device_info.get("device", "Marstek")
         
-        self._attr_name = f"{device_name} Mode"
+        self._attr_name = f"Mode"
         self._attr_unique_id = f"{ble_mac}_mode_select"
         self._attr_current_option = None
         
