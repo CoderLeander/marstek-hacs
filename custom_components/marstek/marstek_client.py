@@ -353,3 +353,31 @@ class MarstekUDPClient:
             }
         }
         return await self._send_rpc_request("ES.SetMode", params)
+    
+    async def set_manual_power(self, device_id: int, power: int, 
+                              time_num: int = 1, start_time: str = "08:30", 
+                              end_time: str = "20:30", week_set: int = 127) -> Optional[dict]:
+        """
+        Update only the power setting for manual mode while preserving other settings.
+        This is a convenience wrapper around set_manual_mode.
+        
+        Args:
+            device_id: Device ID
+            power: Power percentage 0-100
+            time_num: Time slot number (default: 1)
+            start_time: Start time in HH:MM format (default: "08:30")
+            end_time: End time in HH:MM format (default: "20:30")
+            week_set: Week days bitmap, 127 = all days (default: 127)
+            
+        Returns:
+            Response dictionary if successful, None otherwise
+        """
+        return await self.set_manual_mode(
+            device_id=device_id,
+            time_num=time_num,
+            start_time=start_time,
+            end_time=end_time,
+            week_set=week_set,
+            power=power,
+            enable=1
+        )

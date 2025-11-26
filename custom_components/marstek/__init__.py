@@ -132,8 +132,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Validate that we have all required data before forwarding to platforms
     try:
-        # Forward setup to sensor and select platforms
-        await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "select"])
+        # Forward setup to sensor, select, and number platforms
+        await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "select", "number"])
     except Exception as exc:
         _LOGGER.exception("Failed to set up platforms: %s", exc)
         # Clean up on failure
@@ -145,8 +145,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload entry."""
-    # Unload sensor and select platforms
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["sensor", "select"])
+    # Unload sensor, select, and number platforms
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, ["sensor", "select", "number"])
     
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id)
