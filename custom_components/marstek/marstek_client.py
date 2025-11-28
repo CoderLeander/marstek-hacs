@@ -106,6 +106,24 @@ class MarstekUDPClient:
                     txt = response_data.decode('utf-8')
                     obj = json.loads(txt)
                     
+                    # Check if response contains an error - treat as no response and retry
+                    if "error" in obj:
+                        error_code = obj["error"].get("code")
+                        error_msg = obj["error"].get("message")
+                        error_data = obj["error"].get("data")
+                        _LOGGER.warning("Received error response (code: %s, message: %s, data: %s), treating as no response", 
+                                      error_code, error_msg, error_data)
+                        # Treat exactly like no response - break out and trigger retry
+                        return (False, None, response_data)
+                    
+                    # Special validation for EM.GetStatus: check if ct_state is 0 (CT not ready)
+                    if method == "EM.GetStatus" and obj.get("result"):
+                        ct_state = obj["result"].get("ct_state")
+                        if ct_state == 0:
+                            _LOGGER.warning("EM.GetStatus returned ct_state=0 (CT not ready), treating as no response")
+                            # Treat exactly like no response - break out and trigger retry
+                            return (False, None, response_data)
+                    
                     # For read-only methods, accept any valid response
                     if is_read_only:
                         if obj.get("id") != rpc_id:
