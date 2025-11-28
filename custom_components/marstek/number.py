@@ -91,30 +91,32 @@ class MarstekManualPowerNumber(NumberEntity):
                 self._attr_native_value = power_value
                 self.async_write_ha_state()
                 _LOGGER.info("Manual power set to %dW successfully", power_value)
+                
+                # Poll once after setting to verify and update mode
+                try:
+                    verify_response = await self._client.get_mode_status(self._rpc_id)
+                    if verify_response and "result" in verify_response:
+                        result = verify_response["result"]
+                        self._current_mode = result.get("mode")
+                        
+                        # If in Manual mode, get the current power setting
+                        if self._current_mode == "Manual" and "manual_cfg" in result:
+                            manual_cfg = result["manual_cfg"]
+                            if isinstance(manual_cfg, dict):
+                                power = manual_cfg.get("power")
+                                if power is not None:
+                                    self._attr_native_value = int(power)
+                                    self.async_write_ha_state()
+                                    _LOGGER.debug("Verified manual power is now: %dW", power)
+                            elif isinstance(manual_cfg, list) and len(manual_cfg) > 0:
+                                power = manual_cfg[0].get("power")
+                                if power is not None:
+                                    self._attr_native_value = int(power)
+                                    self.async_write_ha_state()
+                                    _LOGGER.debug("Verified manual power is now: %dW", power)
+                except Exception as verify_exc:
+                    _LOGGER.debug("Could not verify manual power after setting: %s", verify_exc)
             else:
                 _LOGGER.error("Failed to set manual power to %dW", power_value)
         except Exception as exc:
             _LOGGER.error("Error setting manual power to %dW: %s", power_value, exc)
-
-    async def async_update(self) -> None:
-        """Fetch the current mode and power from the device."""
-        try:
-            response = await self._client.get_mode_status(self._rpc_id)
-            if response and "result" in response:
-                result = response["result"]
-                self._current_mode = result.get("mode")
-                
-                # If in Manual mode, try to get the current power setting
-                if self._current_mode == "Manual" and "manual_cfg" in result:
-                    manual_cfg = result["manual_cfg"]
-                    if isinstance(manual_cfg, dict):
-                        power = manual_cfg.get("power")
-                        if power is not None:
-                            self._attr_native_value = int(power)
-                    elif isinstance(manual_cfg, list) and len(manual_cfg) > 0:
-                        # If manual_cfg is a list, get power from first time slot
-                        power = manual_cfg[0].get("power")
-                        if power is not None:
-                            self._attr_native_value = int(power)
-        except Exception as exc:
-            _LOGGER.error("Error fetching manual power status: %s", exc)

@@ -76,18 +76,19 @@ class MarstekModeSelect(SelectEntity):
                 self._attr_current_option = option
                 self.async_write_ha_state()
                 _LOGGER.info("Mode changed to %s successfully", option)
+                
+                # Poll once after setting to confirm
+                try:
+                    verify_response = await self._client.get_mode_status(self._rpc_id)
+                    if verify_response and "result" in verify_response:
+                        current_mode = verify_response["result"].get("mode")
+                        if current_mode in self._attr_options:
+                            self._attr_current_option = current_mode
+                            self.async_write_ha_state()
+                            _LOGGER.debug("Verified mode is now: %s", current_mode)
+                except Exception as verify_exc:
+                    _LOGGER.debug("Could not verify mode after setting: %s", verify_exc)
             else:
                 _LOGGER.error("Failed to change mode to %s", option)
         except Exception as exc:
             _LOGGER.error("Error changing mode to %s: %s", option, exc)
-
-    async def async_update(self) -> None:
-        """Fetch the current mode from the device."""
-        try:
-            response = await self._client.get_mode_status(self._rpc_id)
-            if response and "result" in response:
-                current_mode = response["result"].get("mode")
-                if current_mode in self._attr_options:
-                    self._attr_current_option = current_mode
-        except Exception as exc:
-            _LOGGER.error("Error fetching current mode: %s", exc)
