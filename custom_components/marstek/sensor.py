@@ -609,9 +609,9 @@ class MarstekBatteryStatusSensor(MarstekCoordinatorEntity):
         
         # Apply conversions based on the field
         if sensor_key == "bat_temp":
-            return round(float(raw_value) / 10, 1)  # 164.0 / 10 = 16.4°C
+            return round(float(raw_value), 1)
         elif sensor_key == "bat_capacity":
-            return round(float(raw_value) * 10, 1)  # 512.0 * 10 = 5120 Wh
+            return round(float(raw_value), 1)
         elif sensor_key == "rated_capacity":
             return round(float(raw_value), 1)
         elif sensor_key == "soc":
