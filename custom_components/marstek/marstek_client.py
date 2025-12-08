@@ -53,7 +53,10 @@ class MarstekUDPClient:
 
         # Counter for no response events
         self.no_response_counter = 0
-        
+
+        # Last successful poll datetime (ISO8601 UTC)
+        self.last_successful_poll = None
+
         # Allow customization of timing parameters
         self.socket_timeout = socket_timeout or self.DEFAULT_SOCKET_TIMEOUT
         self.total_wait_time = total_wait_time or self.DEFAULT_TOTAL_WAIT_TIME
@@ -209,6 +212,8 @@ class MarstekUDPClient:
                 success, response_obj, response_data = await self._wait_for_response(sock, rpc_id, method, start_time)
                 
                 if success:
+                    from datetime import datetime
+                    self.last_successful_poll = datetime.utcnow().isoformat()
                     return response_obj
                 
                 # Log timeout details - use debug for retries, warning only on final failure
@@ -399,3 +404,9 @@ class MarstekUDPClient:
             power=power,
             enable=1
         )
+
+    def get_last_successful_poll(self) -> str:
+        """
+        Get the ISO8601 string of the last successful poll (UTC).
+        """
+        return self.last_successful_poll or ""

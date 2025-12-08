@@ -25,6 +25,14 @@ NO_RESPONSE_SENSOR_DESCRIPTION = SensorEntityDescription(
     state_class=SensorStateClass.MEASUREMENT,
 )
 
+# Diagnostic sensor for last successful poll
+LAST_POLL_SENSOR_DESCRIPTION = SensorEntityDescription(
+    key="last_successful_poll",
+    name="Last Successful Poll",
+    icon="mdi:clock-check",
+    entity_category=EntityCategory.DIAGNOSTIC,
+)
+
 # Define sensor descriptions for device information
 DEVICE_INFO_SENSORS = [
     SensorEntityDescription(
@@ -335,6 +343,19 @@ class MarstekNoResponseCounterSensor(SensorEntity):
     def native_value(self):
         return self._client.get_no_response_count()
 
+class MarstekLastPollSensor(SensorEntity):
+    """Sensor for Marstek last successful poll datetime."""
+    def __init__(self, client, config_entry: ConfigEntry, description: SensorEntityDescription) -> None:
+        self.entity_description = description
+        self._client = client
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{config_entry.entry_id}_last_successful_poll"
+        self._attr_device_info = _create_device_info(config_entry)
+
+    @property
+    def native_value(self):
+        return self._client.get_last_successful_poll()
+
 class MarstekCoordinatorEntity(CoordinatorEntity, SensorEntity):
     """Base class for Marstek sensors using a coordinator."""
     
@@ -427,6 +448,8 @@ async def async_setup_entry(
     
     # Add the no response counter sensor
     sensors.append(MarstekNoResponseCounterSensor(client, config_entry, NO_RESPONSE_SENSOR_DESCRIPTION))
+    # Add the last successful poll sensor
+    sensors.append(MarstekLastPollSensor(client, config_entry, LAST_POLL_SENSOR_DESCRIPTION))
     async_add_entities(sensors, True)
     _LOGGER.info("Added %d Marstek sensors (%d device info + %d battery + %d mode + %d EM + %d WiFi + %d BLE)", 
                  len(sensors), len(DEVICE_INFO_SENSORS), len(BATTERY_STATUS_SENSORS), len(MODE_STATUS_SENSORS), len(EM_STATUS_SENSORS), len(WIFI_STATUS_SENSORS), len(BLE_STATUS_SENSORS))
