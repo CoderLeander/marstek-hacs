@@ -213,7 +213,7 @@ class MarstekUDPClient:
                 
                 if success:
                     from datetime import datetime
-                    self.last_successful_poll = datetime.utcnow().isoformat()
+                    self.last_successful_poll = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                     return response_obj
                 
                 # Log timeout details - use debug for retries, warning only on final failure
@@ -407,6 +407,6 @@ class MarstekUDPClient:
 
     def get_last_successful_poll(self) -> str:
         """
-        Get the ISO8601 string of the last successful poll (UTC).
+        Get the string of the last successful poll (local time, up to seconds).
         """
         return self.last_successful_poll or ""
