@@ -470,22 +470,19 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
         )
 
     async def _async_update_data(self):
-        """Fetch ES.GetMode and EM.GetStatus."""
+        """Fetch ES.GetMode"""
         try:
             previous_data = getattr(self, 'data', {})
 
             # Send API requests sequentially
             mode_resp = await self.client.get_mode_status(self.device_id)
-            #em_resp = await self.client.get_em_status(self.device_id)
 
             # Build data dict, using previous data if API call fails or returns error
             data = {}
             data["mode"] = get_result_or_previous(mode_resp, "mode", previous_data)
-            #em_result = get_result_or_previous(em_resp, "em", previous_data)
                         
             # Log results for each endpoint using shared helper
             log_status_result(_LOGGER, self.device_id, "ES.GetMode", mode_resp, data["mode"])
-            #log_status_result(_LOGGER, self.device_id, "EM.GetStatus", em_resp, em_result)
 
             _LOGGER.debug("Fast coordinator combined data: %s", data)
             return data
