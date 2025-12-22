@@ -476,20 +476,16 @@ class MarstekDataUpdateCoordinator(DataUpdateCoordinator):
 
             # Send API requests sequentially
             mode_resp = await self.client.get_mode_status(self.device_id)
-            em_resp = await self.client.get_em_status(self.device_id)
+            #em_resp = await self.client.get_em_status(self.device_id)
 
             # Build data dict, using previous data if API call fails or returns error
-            mode_result = get_result_or_previous(mode_resp, "mode", previous_data)
-            em_result = get_result_or_previous(em_resp, "em", previous_data)
-            
-            # Compose combined data with 'mode' key for consistency
             data = {}
-            data["mode"] = mode_result
-            data["em"] = em_result
-            
+            data["mode"] = get_result_or_previous(mode_resp, "mode", previous_data)
+            #em_result = get_result_or_previous(em_resp, "em", previous_data)
+                        
             # Log results for each endpoint using shared helper
-            log_status_result(_LOGGER, self.device_id, "ES.GetMode", mode_resp, mode_result)
-            log_status_result(_LOGGER, self.device_id, "EM.GetStatus", em_resp, em_result)
+            log_status_result(_LOGGER, self.device_id, "ES.GetMode", mode_resp, data["mode"])
+            #log_status_result(_LOGGER, self.device_id, "EM.GetStatus", em_resp, em_result)
 
             _LOGGER.debug("Fast coordinator combined data: %s", data)
             return data
@@ -521,17 +517,20 @@ class MarstekStatusDataUpdateCoordinator(DataUpdateCoordinator):
             wifi_resp = await self.client.get_wifi_status(self.device_id)
             ble_resp = await self.client.get_ble_status(self.device_id)
             bat_resp = await self.client.get_battery_status(self.device_id)
+            em_resp = await self.client.get_em_status(self.device_id)
             
             # Build data dict, using previous data if API call fails or returns error
             data = {}
             data["wifi"] = get_result_or_previous(wifi_resp, "wifi", previous_data)
             data["ble"] = get_result_or_previous(ble_resp, "ble", previous_data)
             data["bat"] = get_result_or_previous(bat_resp, "bat", previous_data)
+            data["em"] = get_result_or_previous(em_resp, "em", previous_data)
 
             # Log results for each endpoint using shared helper
             log_status_result(_LOGGER, self.device_id, "Wifi.GetStatus", wifi_resp, data["wifi"])
             log_status_result(_LOGGER, self.device_id, "BLE.GetStatus", ble_resp, data["ble"])
             log_status_result(_LOGGER, self.device_id, "Bat.GetStatus", bat_resp, data["bat"])
+            log_status_result(_LOGGER, self.device_id, "EM.GetStatus", em_resp, data["em"])
 
             _LOGGER.debug("Combined status data: %s", data)
             return data
